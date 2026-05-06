@@ -7,6 +7,10 @@ from typing import Any
 from uuid import uuid4
 
 from pipeline.planning.local.client import request_plan
+from pipeline.planning.local.frontend_upload import (
+    load_frontend_upload_job,
+    resolve_frontend_upload_dir,
+)
 from pipeline.planning.local.preprocess import (
     encode_frames_base64,
     preprocess_video,
@@ -106,9 +110,19 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Local preprocess -> Colab plan generation -> local validate/render."
     )
-    parser.add_argument("--video", required=True, type=Path, help="Source video path on local machine.")
+    parser.add_argument(
+        "--video",
+        type=Path,
+        default=None,
+        help="Source video path on local machine (required unless --frontend-upload-job-id).",
+    )
     parser.add_argument("--colab-url", required=True, help="Base URL for Colab FastAPI service.")
-    parser.add_argument("--prompt", required=True, help="Editing request passed to planner.")
+    parser.add_argument(
+        "--prompt",
+        default=None,
+        help="Editing request passed to planner (required unless --frontend-upload-job-id). "
+        "When using --frontend-upload-job-id, overrides the prompt saved by the web UI if set.",
+    )
     parser.add_argument("--mode", default="style", help="Prompt mode (style, targeted, etc).")
     parser.add_argument(
         "--run-dir",
@@ -140,6 +154,19 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Path visible from Colab runtime (required when not using --use-frame-array).",
     )
+    parser.add_argument(
+        "--frontend-upload-job-id",
+        default=None,
+        metavar="JOB_ID",
+        help="Next.js upload job UUID under frontend/uploads/<JOB_ID>/; uses job.json (or prompt.txt) "
+        "for user_prompt and the uploaded video file for local preprocessing.",
+    )
+    parser.add_argument(
+        "--frontend-uploads-root",
+        type=Path,
+        default=Path("frontend/uploads"),
+        help="Directory containing per-job upload folders (relative to repo root unless absolute).",
+    )
     parser.add_argument("--run-whisper", action="store_true", help="Run Whisper locally.")
     parser.add_argument("--whisper-model", default="base", help="Whisper model name.")
     parser.add_argument("--whisper-language", default=None, help="Optional Whisper language code.")
@@ -148,6 +175,36 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+
+    video_path = args.video
+    user_prompt = args.prompt
+
+    if args.frontend_upload_job_id:
+        upload_dir = resolve_frontend_upload_dir(
+            args.frontend_upload_job_id,
+            uploads_root=args.frontend_uploads_root,
+        )
+        loaded_video, loaded_prompt = load_frontend_upload_job(upload_dir)
+        if video_path is None:
+            video_path = loaded_video
+        elif video_path.resolve() != loaded_video.resolve():
+            raise SystemExit(
+                "--video conflicts with --frontend-upload-job-id "
+                f"(expected {loaded_video}). Omit --video to use the uploaded file."
+            )
+        if user_prompt is None:
+            user_prompt = loaded_prompt
+        print(
+            f"[frontend-upload] dir={upload_dir} video={video_path} "
+            f"user_prompt_chars={len(user_prompt)}",
+            flush=True,
+        )
+    else:
+        if video_path is None:
+            raise SystemExit("--video is required unless --frontend-upload-job-id is set.")
+        if user_prompt is None:
+            raise SystemExit("--prompt is required unless --frontend-upload-job-id is set.")
+
     if not args.use_frame_array and not args.colab_video_path:
         raise SystemExit(
             "When local and Colab are separate machines, pass --colab-video-path "
@@ -159,7 +216,7 @@ def main() -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     source_meta, transcript_words = preprocess_video(
-        args.video,
+        video_path,
         run_whisper=args.run_whisper,
         whisper_model=args.whisper_model,
         whisper_language=args.whisper_language,
@@ -169,7 +226,7 @@ def main() -> int:
     if args.use_frame_array:
         frame_dir = run_dir / "frames"
         frames = sample_frames(
-            args.video,
+            video_path,
             frame_dir,
             sample_fps=args.sample_fps,
             max_frames=args.max_frames,
@@ -180,10 +237,10 @@ def main() -> int:
         run_id=run_id,
         source_meta=source_meta,
         transcript_words=transcript_words,
-        user_prompt=args.prompt,
+        user_prompt=user_prompt,
         mode=args.mode,
         use_frame_array=args.use_frame_array,
-        video_path=args.video,
+        video_path=video_path,
         colab_video_path=args.colab_video_path,
         frame_payload=frame_payload,
         sample_fps=args.sample_fps,
@@ -227,7 +284,7 @@ def main() -> int:
 
     if args.render_out:
         args.render_out.parent.mkdir(parents=True, exist_ok=True)
-        render(args.output_plan, args.video, args.render_out)
+        render(args.output_plan, video_path, args.render_out)
 
     print(str(args.output_plan))
     return 0

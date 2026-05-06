@@ -23,8 +23,8 @@ export default function HomePage() {
           Upload. Prompt. Render.
         </h1>
         <p className="max-w-3xl text-zinc-300">
-          Submit your source media and creative direction in one place. This UI sends video and
-          prompt text to the backend upload API.
+          Submit your source media and creative direction in one place. This UI now runs the
+          end-to-end planning and rendering pipeline directly from the frontend.
         </p>
       </div>
 

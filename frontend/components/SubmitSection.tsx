@@ -19,9 +19,9 @@ type UploadResponse = {
   sourceVideoUrl?: string;
   outputVideoName?: string | null;
   outputVideoUrl?: string | null;
-  outputUpdatedAt?: string | null;
   prompt: string;
   savedAt: string;
+  status?: string;
 };
 
 type OutputVideoResponse = {
@@ -30,51 +30,93 @@ type OutputVideoResponse = {
   updatedAt: string;
 };
 
+type JobStatusResponse = {
+  status: "queued" | "running" | "completed" | "failed";
+  step: string;
+  message: string;
+  error: string | null;
+  startedAt: string | null;
+  updatedAt: string | null;
+};
+
 const MAX_PROMPT_LEN = 1000;
+const COLAB_URL_STORAGE_KEY = "ai-edits-colab-url";
 
 export function SubmitSection({ videoFile }: SubmitSectionProps) {
   const [prompt, setPrompt] = useState("");
+  const [colabUrl, setColabUrl] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem(COLAB_URL_STORAGE_KEY) ?? "";
+  });
+  const [useFrameArray, setUseFrameArray] = useState(false);
+  const [colabVideoPath, setColabVideoPath] = useState("");
+  const [runWhisper, setRunWhisper] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [jobStatus, setJobStatus] = useState<JobStatusResponse | null>(null);
   const [serverResponse, setServerResponse] = useState<UploadResponse | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
+    if (!colabUrl) return;
+    window.localStorage.setItem(COLAB_URL_STORAGE_KEY, colabUrl);
+  }, [colabUrl]);
+
+  useEffect(() => {
     const jobId = serverResponse?.jobId;
-    if (!jobId || serverResponse.outputVideoUrl) return;
+    if (!jobId || jobStatus?.status === "completed" || jobStatus?.status === "failed") return;
 
     let isActive = true;
 
-    const checkForOutputVideo = async () => {
+    const checkStatus = async () => {
       try {
-        const response = await fetch(`/api/jobs/${jobId}/output`, { cache: "no-store" });
+        const response = await fetch(`/api/jobs/${jobId}/status`, { cache: "no-store" });
         if (!response.ok) return;
 
-        const output = (await response.json()) as OutputVideoResponse;
+        const nextStatus = (await response.json()) as JobStatusResponse;
         if (!isActive) return;
+        setJobStatus(nextStatus);
 
-        setServerResponse((current) => {
-          if (!current || current.jobId !== jobId) return current;
-          return {
-            ...current,
-            outputVideoName: output.outputVideoName,
-            outputVideoUrl: output.outputVideoUrl,
-            outputUpdatedAt: output.updatedAt,
-          };
-        });
+        if (nextStatus.status === "completed") {
+          const outputResponse = await fetch(`/api/jobs/${jobId}/output`, { cache: "no-store" });
+          if (outputResponse.ok) {
+            const output = (await outputResponse.json()) as OutputVideoResponse;
+            if (!isActive) return;
+            setServerResponse((current) => {
+              if (!current || current.jobId !== jobId) return current;
+              return {
+                ...current,
+                outputVideoName: output.outputVideoName,
+                outputVideoUrl: output.outputVideoUrl,
+              };
+            });
+          }
+          toast({
+            title: "Pipeline complete",
+            description: `Job ${jobId} finished rendering.`,
+          });
+        }
+
+        if (nextStatus.status === "failed") {
+          toast({
+            variant: "destructive",
+            title: "Pipeline failed",
+            description: nextStatus.error ?? "An unknown pipeline error occurred.",
+          });
+        }
       } catch {
-        // The renderer may still be working; keep polling quietly.
+        // Keep polling quietly if transient errors occur.
       }
     };
 
-    void checkForOutputVideo();
-    const intervalId = window.setInterval(checkForOutputVideo, 3000);
+    void checkStatus();
+    const intervalId = window.setInterval(checkStatus, 3000);
 
     return () => {
       isActive = false;
       window.clearInterval(intervalId);
     };
-  }, [serverResponse?.jobId, serverResponse?.outputVideoUrl]);
+  }, [serverResponse?.jobId, jobStatus?.status, toast]);
 
   const onSubmit = async () => {
     if (!videoFile) {
@@ -95,18 +137,43 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
       return;
     }
 
+    if (!colabUrl.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Colab URL required",
+        description: "Please add your Colab planner base URL before submitting.",
+      });
+      return;
+    }
+
+    if (!useFrameArray && !colabVideoPath.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Colab video path required",
+        description: "Provide a Colab-visible path or enable frame-array mode.",
+      });
+      return;
+    }
+
     const formData = new FormData();
     formData.append("video", videoFile);
     formData.append("prompt", prompt.trim());
+    formData.append("colabUrl", colabUrl.trim());
+    formData.append("useFrameArray", useFrameArray ? "true" : "false");
+    formData.append("runWhisper", runWhisper ? "true" : "false");
+    if (!useFrameArray) {
+      formData.append("colabVideoPath", colabVideoPath.trim());
+    }
 
     setIsSubmitting(true);
     setUploadProgress(0);
+    setJobStatus(null);
     setServerResponse(null);
 
     try {
       const response = await new Promise<UploadResponse>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("POST", "/api/upload");
+        xhr.open("POST", "/api/pipeline/run");
         xhr.responseType = "json";
 
         xhr.upload.onprogress = (event) => {
@@ -129,9 +196,17 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
 
       setServerResponse(response);
       setUploadProgress(100);
+      setJobStatus({
+        status: "queued",
+        step: "queued",
+        message: "Pipeline job queued.",
+        error: null,
+        startedAt: null,
+        updatedAt: null,
+      });
       toast({
-        title: "Upload complete",
-        description: `Job ${response.jobId} created.`,
+        title: "Pipeline started",
+        description: `Job ${response.jobId} was submitted.`,
       });
     } catch (error) {
       toast({
@@ -146,6 +221,48 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
 
   return (
     <div className="space-y-4 rounded-xl border border-zinc-700 bg-zinc-950/55 p-5">
+      <div className="space-y-2">
+        <Label htmlFor="colab-url" className="font-mono uppercase tracking-[0.2em] text-zinc-300">
+          Colab Planner URL
+        </Label>
+        <input
+          id="colab-url"
+          value={colabUrl}
+          onChange={(event) => setColabUrl(event.target.value)}
+          placeholder="https://your-colab-service-url"
+          className="h-10 w-full rounded-md border border-zinc-700 bg-black/20 px-3 text-sm"
+        />
+        <Label htmlFor="colab-video-path" className="font-mono uppercase tracking-[0.2em] text-zinc-300">
+          Colab Video Path
+        </Label>
+        <input
+          id="colab-video-path"
+          value={colabVideoPath}
+          disabled={useFrameArray}
+          onChange={(event) => setColabVideoPath(event.target.value)}
+          placeholder="/content/drive/MyDrive/path/to/video.mp4"
+          className="h-10 w-full rounded-md border border-zinc-700 bg-black/20 px-3 text-sm disabled:opacity-50"
+        />
+        <div className="flex flex-wrap items-center gap-6 pt-1 text-sm text-zinc-300">
+          <label className="inline-flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={useFrameArray}
+              onChange={(event) => setUseFrameArray(event.target.checked)}
+            />
+            Use frame-array mode
+          </label>
+          <label className="inline-flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={runWhisper}
+              onChange={(event) => setRunWhisper(event.target.checked)}
+            />
+            Run Whisper locally
+          </label>
+        </div>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="prompt" className="font-mono uppercase tracking-[0.2em] text-zinc-300">
           Prompt for VLM
@@ -166,7 +283,30 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
       {isSubmitting ? (
         <div className="space-y-2">
           <Progress value={uploadProgress} />
-          <p className="font-mono text-xs text-zinc-400">Uploading... {uploadProgress}%</p>
+          <p className="font-mono text-xs text-zinc-400">Uploading payload... {uploadProgress}%</p>
+        </div>
+      ) : null}
+
+      {jobStatus ? (
+        <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-3">
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">Pipeline status</p>
+          <p className="text-sm text-zinc-200">
+            Step: <span className="font-mono">{jobStatus.step}</span>
+          </p>
+          <p className="text-xs text-zinc-400">{jobStatus.message}</p>
+          <Progress
+            value={
+              jobStatus.status === "completed"
+                ? 100
+                : jobStatus.step === "rendering"
+                  ? 90
+                  : jobStatus.step === "planning"
+                    ? 60
+                    : jobStatus.step === "preprocessing"
+                      ? 30
+                      : 10
+            }
+          />
         </div>
       ) : null}
 
@@ -201,9 +341,7 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
             </div>
           ) : (
             <p className="rounded-md border border-zinc-800 bg-zinc-950/60 p-3 text-xs text-zinc-500">
-              Waiting for an output video. The renderer can post it to{" "}
-              <span className="font-mono text-zinc-300">/api/jobs/{serverResponse.jobId}/output</span>,
-              and it will appear here for playback.
+              Rendering is in progress. The output video will appear automatically when complete.
             </p>
           )}
         </div>

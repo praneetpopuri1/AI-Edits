@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { NextResponse } from "next/server";
+import { getUploadDir, safeFilename, saveBrowserFile } from "@/lib/saveUpload";
 
 export const runtime = "nodejs";
 
@@ -21,22 +22,12 @@ function isSafePathSegment(value: string): boolean {
   return /^[a-zA-Z0-9._-]+$/.test(value);
 }
 
-function safeFilename(name: string): string {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "_");
-}
-
 function getJobDir(jobId: string): string {
-  return path.join(process.cwd(), "uploads", jobId);
+  return getUploadDir(jobId);
 }
 
 function getMetadataPath(jobId: string): string {
   return path.join(getJobDir(jobId), "output-video.json");
-}
-
-async function saveFile(file: File, outputPath: string): Promise<void> {
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  await writeFile(outputPath, buffer);
 }
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -76,7 +67,7 @@ export async function POST(request: Request, context: RouteContext) {
     await mkdir(jobDir, { recursive: true });
 
     const outputVideoName = safeFilename(outputVideo.name || "output-video.mp4");
-    await saveFile(outputVideo, path.join(jobDir, outputVideoName));
+    await saveBrowserFile(outputVideo, path.join(jobDir, outputVideoName));
 
     const metadata: OutputVideoMetadata = {
       outputVideoName,

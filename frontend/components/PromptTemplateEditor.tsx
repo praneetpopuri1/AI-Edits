@@ -157,6 +157,10 @@ export function PromptTemplateEditor() {
             Keep the placeholder tokens where you want runtime metadata, transcript, and contract
             content inserted.
           </p>
+          <p className="max-w-3xl text-xs text-zinc-500">
+            In pass 2, <span className="font-mono text-zinc-300">[[USER_PROMPT]]</span> is filled
+            from the submission form&apos;s prompt field at runtime.
+          </p>
           <p className="font-mono text-xs text-zinc-500">
             {updatedAt ? `Last saved ${new Date(updatedAt).toLocaleString()}` : "Using checked-in prompt templates"}
           </p>

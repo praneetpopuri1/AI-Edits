@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { NextResponse } from "next/server";
+import { getUploadDir, getUploadsRoot } from "@/lib/saveUpload";
 
 export const runtime = "nodejs";
 
@@ -30,8 +31,8 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Invalid video path." }, { status: 400 });
   }
 
-  const uploadsRoot = path.resolve(process.cwd(), "uploads");
-  const videoPath = path.resolve(uploadsRoot, jobId, filename);
+  const uploadsRoot = path.resolve(getUploadsRoot());
+  const videoPath = path.resolve(getUploadDir(jobId), filename);
 
   if (!videoPath.startsWith(`${uploadsRoot}${path.sep}`)) {
     return NextResponse.json({ error: "Invalid video path." }, { status: 400 });

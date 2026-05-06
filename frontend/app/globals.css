@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 3%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 7%;
+  --card-foreground: 0 0% 97%;
+  --popover: 0 0% 7%;
+  --popover-foreground: 0 0% 97%;
+  --primary: 16 100% 50%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 0 0% 12%;
+  --secondary-foreground: 0 0% 95%;
+  --muted: 0 0% 14%;
+  --muted-foreground: 0 0% 70%;
+  --accent: 16 100% 50%;
+  --accent-foreground: 0 0% 96%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 20%;
+  --input: 0 0% 17%;
+  --ring: 16 100% 50%;
+  --radius: 0.75rem;
+}
+
+* {
+  @apply border-border;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  background-image: radial-gradient(
+      circle at 20% 15%,
+      rgba(255, 69, 0, 0.08),
+      transparent 40%
+    ),
+    radial-gradient(circle at 80% 0%, rgba(255, 69, 0, 0.06), transparent 36%);
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.18;
+  z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cg fill='none'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Ccircle cx='5' cy='8' r='1'/%3E%3Ccircle cx='90' cy='60' r='1'/%3E%3Ccircle cx='140' cy='120' r='1'/%3E%3Ccircle cx='44' cy='150' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+main {
+  position: relative;
+  z-index: 1;
+}

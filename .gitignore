@@ -11,3 +11,7 @@ renderer/public/
 pipeline/planning/runs/
 # edit plans
 edit_plans/
+#skills folder
+skills/
+#claude md file
+CLAUDE.md

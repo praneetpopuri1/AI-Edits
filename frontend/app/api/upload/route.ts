@@ -21,7 +21,6 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const video = formData.get("video");
     const prompt = formData.get("prompt");
-    const images = formData.getAll("images");
 
     if (!(video instanceof File)) {
       return NextResponse.json({ error: "Video file is required." }, { status: 400 });
@@ -36,15 +35,6 @@ export async function POST(request: Request) {
     const videoName = safeFilename(video.name || "source-video.mp4");
     await saveFile(video, path.join(uploadDir, videoName));
 
-    let imageCount = 0;
-    for (const image of images) {
-      if (!(image instanceof File)) continue;
-      if (!image.type.startsWith("image/")) continue;
-      const imageName = safeFilename(image.name || `image-${imageCount + 1}.png`);
-      await saveFile(image, path.join(uploadDir, imageName));
-      imageCount += 1;
-    }
-
     await writeFile(
       path.join(uploadDir, "prompt.txt"),
       promptText,
@@ -54,7 +44,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       jobId,
       videoName,
-      imageCount,
       prompt: promptText,
       savedAt: uploadDir,
     });

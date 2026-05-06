@@ -25,6 +25,12 @@ ALLOWED_OVERLAY_POSITIONS = {
     "corner_br",
     "corner_bl",
 }
+ALLOWED_OVERLAY_ASSET_TYPES = {
+    "stock_photo",
+    "icon",
+    "generated_illustration",
+    "diagram",
+}
 OVERLAY_POSITION_ALIASES = {
     "top_right": "corner_tr",
     "top_left": "corner_tl",
@@ -316,6 +322,47 @@ def filter_overlays(items: list[dict[str, Any]], duration_s: float) -> list[dict
         if normalized_position not in ALLOWED_OVERLAY_POSITIONS:
             normalized_position = "picture_in_picture"
         overlay["position"] = normalized_position
+
+        raw_asset_type = str(overlay.get("asset_type", "stock_photo")).strip().lower()
+        if raw_asset_type not in ALLOWED_OVERLAY_ASSET_TYPES:
+            raw_asset_type = "stock_photo"
+        overlay["asset_type"] = raw_asset_type
+
+        legacy_query = str(overlay.get("image_query", "")).strip()
+        search_query = str(overlay.get("search_query", "")).strip()
+        visual_description = str(overlay.get("visual_description", "")).strip()
+        style = str(overlay.get("style", "")).strip()
+
+        if not search_query and legacy_query:
+            search_query = legacy_query
+
+        if search_query:
+            overlay["search_query"] = search_query
+        else:
+            overlay.pop("search_query", None)
+
+        # Keep image_query for schema compatibility while nudging toward search_query.
+        if legacy_query:
+            overlay["image_query"] = legacy_query
+        elif search_query:
+            overlay["image_query"] = search_query
+        else:
+            overlay.pop("image_query", None)
+
+        if visual_description:
+            overlay["visual_description"] = visual_description
+        else:
+            overlay.pop("visual_description", None)
+
+        if style:
+            overlay["style"] = style
+        else:
+            overlay.pop("style", None)
+
+        # Must include at least one intent field for resolver input.
+        if not overlay.get("search_query") and not overlay.get("visual_description"):
+            continue
+
         out.append(overlay)
     return out
 

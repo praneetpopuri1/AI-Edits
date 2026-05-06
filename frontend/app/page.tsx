@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Clapperboard, Sparkles } from "lucide-react";
 
-import { ImageDropZone } from "@/components/ImageDropZone";
+import { PromptTemplateEditor } from "@/components/PromptTemplateEditor";
 import { SubmitSection } from "@/components/SubmitSection";
 import { VideoDropZone } from "@/components/VideoDropZone";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,6 @@ import { Separator } from "@/components/ui/separator";
 
 export default function HomePage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
@@ -24,8 +23,8 @@ export default function HomePage() {
           Upload. Prompt. Render.
         </h1>
         <p className="max-w-3xl text-zinc-300">
-          Submit your source media and creative direction in one place. This UI sends video,
-          optional image assets, and editing prompt text to the backend upload API.
+          Submit your source media and creative direction in one place. This UI sends video and
+          prompt text to the backend upload API.
         </p>
       </div>
 
@@ -42,9 +41,9 @@ export default function HomePage() {
         <CardContent className="space-y-6">
           <VideoDropZone videoFile={videoFile} onVideoChange={setVideoFile} />
           <Separator className="bg-zinc-800" />
-          <ImageDropZone imageFiles={imageFiles} onImageChange={setImageFiles} />
+          <SubmitSection videoFile={videoFile} />
           <Separator className="bg-zinc-800" />
-          <SubmitSection videoFile={videoFile} imageFiles={imageFiles} />
+          <PromptTemplateEditor />
         </CardContent>
       </Card>
     </main>

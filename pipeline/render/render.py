@@ -14,11 +14,11 @@ import tempfile
 from pathlib import Path
 
 try:
+    from pipeline.render.overlay_resolver import resolve_overlay_assets
     from pipeline.render.validate_plan import validate_plan
 except ImportError:  # pragma: no cover - keeps direct script usage working
+    from overlay_resolver import resolve_overlay_assets
     from validate_plan import validate_plan
-
-
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -83,9 +83,13 @@ def render(
     with plan_path.open(encoding="utf-8") as f:
         plan = json.load(f)
 
+    public = _public_dir()
+    plan, overlay_warnings = resolve_overlay_assets(plan, public)
+    for warning in overlay_warnings:
+        print(f"[overlay-resolver] {warning}", file=sys.stderr)
+
     validate_plan(plan)
 
-    public = _public_dir()
     if source_video_public_name is None:
         # Preserve original extension so Remotion gets the right media type
         # (e.g. .mov remains .mov rather than being renamed to .mp4).

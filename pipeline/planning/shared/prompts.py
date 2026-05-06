@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 TRANSCRIPT_WORD_LIMIT = 1000
+PROMPT_TEMPLATE_PATH = Path(__file__).with_name("prompt_templates.json")
 
 
 EDIT_PLAN_CONTRACT = """
@@ -31,7 +33,7 @@ Decision object shape (all fields optional):
     "words": [{"word": "token", "emphasis": "none" | "highlight" | "bold" | "color_pop", "omit": true}]
   },
   "zooms": [{"start_s": number, "end_s": number, "scale": number, "anchor": "top_left" | "top_center" | "top_right" | "center_left" | "center" | "center_right" | "bottom_left" | "bottom_center" | "bottom_right" | "custom", "anchor_xy": {"x": number, "y": number}, "easing": "ease_in_out" | "ease_in" | "ease_out" | "linear" | "spring"}],
-  "overlays": [{"start_s": number, "end_s": number, "image_query": string, "position": "fullscreen" | "picture_in_picture" | "left_third" | "right_third" | "top_half" | "bottom_half" | "corner_tr" | "corner_tl" | "corner_br" | "corner_bl", "animation": "none" | "fade_in" | "slide_in_right" | "slide_in_left" | "slide_in_up" | "pop" | "scale_up"}],
+  "overlays": [{"start_s": number, "end_s": number, "asset_type": "stock_photo" | "icon" | "generated_illustration" | "diagram", "visual_description": string, "search_query": string, "style": string, "position": "fullscreen" | "picture_in_picture" | "left_third" | "right_third" | "top_half" | "bottom_half" | "corner_tr" | "corner_tl" | "corner_br" | "corner_bl", "animation": "none" | "fade_in" | "slide_in_right" | "slide_in_left" | "slide_in_up" | "pop" | "scale_up"}],
   "text_overlays": [{"start_s": number, "end_s": number, "text": string, "position": "top_center" | "bottom_center" | "center" | "top_left" | "top_right" | "bottom_left" | "bottom_right", "style": "title_card" | "lower_third" | "callout" | "stat" | "label", "animation": "none" | "fade_in" | "typewriter" | "slide_in_up" | "pop"}],
   "music": {"enabled": boolean, "mood": "upbeat" | "chill" | "dramatic" | "corporate" | "playful" | "inspirational" | "dark" | "none", "start_s": number, "end_s": number, "volume": number, "duck_under_speech": boolean},
   "reframe": {"enabled": boolean, "target_aspect_ratio": "16:9" | "9:16" | "1:1" | "4:5", "focus": "center" | "custom"}
@@ -48,29 +50,32 @@ Zoom rules:
 - zooms[].anchor is a coarse 3x3 region (fallback when anchor_xy is omitted).
 - For a held object or precise subject, add anchor_xy: normalized (x,y) with (0,0)=top-left and (1,1)=bottom-right, placed on the subject's visual center. When anchor_xy is present, it overrides anchor for the zoom focal point so the punch-in stays on the subject.
 - Reframe focus is only "center" | "custom" (no tracking).
+
+Overlay rules:
+- The model decides overlay intent only; do NOT output image_url.
+- Always provide at least one of search_query or visual_description.
+- Use stock_photo for real-world references; use generated_illustration/diagram for synthetic visuals.
 """.strip()
 
-
-def build_timeline_prompt(source_meta: dict[str, Any]) -> str:
-    return f"""
+DEFAULT_TIMELINE_PROMPT_TEMPLATE = """
 You are analyzing a video for an editing pipeline.
 
 Source metadata:
-{json.dumps(source_meta, indent=2)}
+[[SOURCE_META_JSON]]
 
 Return JSON only with this exact shape:
-{{
+{
   "summary": "short summary",
   "events": [
-    {{
+    {
       "start": "mm:ss.ff",
       "end": "mm:ss.ff",
       "description": "short visual description",
       "visible_objects": ["object"],
       "confidence": "low|medium|high"
-    }}
+    }
   ]
-}}
+}
 
 Rules:
 - Output at most 8 events.
@@ -81,30 +86,20 @@ Rules:
 - Do NOT include markdown fences.
 """.strip()
 
-
-def build_plan_prompt(
-    *,
-    source_meta: dict[str, Any],
-    events: list[dict[str, Any]],
-    transcript_words: list[dict[str, Any]],
-    user_prompt: str,
-) -> str:
-    # Keep transcript compact to avoid context blowups.
-    transcript_slice = transcript_words[:TRANSCRIPT_WORD_LIMIT]
-    return f"""
+DEFAULT_PLAN_PROMPT_TEMPLATE = """
 You are generating an edit plan for a deterministic renderer.
 
 User editing request:
-{user_prompt}
+[[USER_PROMPT]]
 
 Source metadata:
-{json.dumps(source_meta, indent=2)}
+[[SOURCE_META_JSON]]
 
 Timeline events from pass 1:
-{json.dumps(events, indent=2)}
+[[TIMELINE_EVENTS_JSON]]
 
 Whisper word timestamps:
-{json.dumps(transcript_slice, indent=2)}
+[[TRANSCRIPT_WORDS_JSON]]
 
 Requirements:
 - Keep segments gapless across the full video duration.
@@ -117,6 +112,68 @@ Requirements:
 - Return one concise JSON object of decisions; backend compiles and validates the final plan.
 
 Contract:
-{EDIT_PLAN_CONTRACT}
+[[EDIT_PLAN_CONTRACT]]
 """.strip()
+
+
+def _load_prompt_templates() -> dict[str, str]:
+    templates = {
+        "timeline": DEFAULT_TIMELINE_PROMPT_TEMPLATE,
+        "plan": DEFAULT_PLAN_PROMPT_TEMPLATE,
+    }
+    try:
+        data = json.loads(PROMPT_TEMPLATE_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return templates
+    except json.JSONDecodeError:
+        return templates
+
+    configured_templates = data.get("templates", {})
+    if not isinstance(configured_templates, dict):
+        return templates
+
+    for key in templates:
+        value = configured_templates.get(key)
+        if isinstance(value, str) and value.strip():
+            templates[key] = value.strip()
+    return templates
+
+
+def _render_template(template: str, values: dict[str, str]) -> str:
+    rendered = template
+    for key, value in values.items():
+        rendered = rendered.replace(f"[[{key}]]", value)
+    return rendered.strip()
+
+
+def build_timeline_prompt(source_meta: dict[str, Any]) -> str:
+    templates = _load_prompt_templates()
+    return _render_template(
+        templates["timeline"],
+        {
+            "SOURCE_META_JSON": json.dumps(source_meta, indent=2),
+        },
+    )
+
+
+def build_plan_prompt(
+    *,
+    source_meta: dict[str, Any],
+    events: list[dict[str, Any]],
+    transcript_words: list[dict[str, Any]],
+    user_prompt: str,
+) -> str:
+    # Keep transcript compact to avoid context blowups.
+    transcript_slice = transcript_words[:TRANSCRIPT_WORD_LIMIT]
+    templates = _load_prompt_templates()
+    return _render_template(
+        templates["plan"],
+        {
+            "USER_PROMPT": user_prompt,
+            "SOURCE_META_JSON": json.dumps(source_meta, indent=2),
+            "TIMELINE_EVENTS_JSON": json.dumps(events, indent=2),
+            "TRANSCRIPT_WORDS_JSON": json.dumps(transcript_slice, indent=2),
+            "EDIT_PLAN_CONTRACT": EDIT_PLAN_CONTRACT,
+        },
+    )
 

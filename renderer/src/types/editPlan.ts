@@ -114,10 +114,20 @@ export type OverlayAnimation =
   | "pop"
   | "scale_up";
 
+export type OverlayAssetType =
+  | "stock_photo"
+  | "icon"
+  | "generated_illustration"
+  | "diagram";
+
 export type Overlay = {
   start_s: number;
   end_s: number;
-  image_query: string;
+  asset_type?: OverlayAssetType;
+  visual_description?: string;
+  search_query?: string;
+  image_query?: string; // legacy alias from older plans
+  style?: string;
   image_url?: string;
   position: OverlayPosition;
   animation?: OverlayAnimation;

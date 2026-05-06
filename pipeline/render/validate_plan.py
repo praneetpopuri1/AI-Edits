@@ -70,6 +70,22 @@ def _semantic_validate(plan: dict[str, Any]) -> None:
 
     if plan.get("overlays"):
         check_sorted("overlays", plan["overlays"])
+        for i, o in enumerate(plan["overlays"]):
+            start_s = float(o["start_s"])
+            end_s = float(o["end_s"])
+            if end_s <= start_s:
+                raise ValueError(f"overlays[{i}] must have end_s > start_s")
+            if start_s < 0 or end_s > duration + 1e-3:
+                raise ValueError(f"overlays[{i}] out of [0, duration_s]")
+            image_url = str(o.get("image_url", "")).strip()
+            if not image_url:
+                raise ValueError(f"overlays[{i}] missing resolved image_url")
+            if image_url.startswith(("http://", "https://")):
+                raise ValueError(f"overlays[{i}] image_url must be local public path")
+            if image_url.startswith("/") or ".." in Path(image_url).parts:
+                raise ValueError(f"overlays[{i}] image_url is not a safe local path")
+            if not image_url.startswith("overlays/"):
+                raise ValueError(f"overlays[{i}] image_url must be under overlays/")
     if plan.get("text_overlays"):
         check_sorted("text_overlays", plan["text_overlays"])
 

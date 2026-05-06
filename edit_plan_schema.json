@@ -183,12 +183,16 @@
 
     "overlays": {
       "type": "array",
-      "description": "Image or graphic overlays inserted into the frame. These are B-roll images, diagrams, memes, or illustrations that appear on screen while the speaker talks. The model decides WHAT to show, WHEN, and WHERE — the image source is either a URL or a search query that the pipeline resolves. Good overlay placement shows a relevant image exactly when the speaker references a concept.",
+      "description": "Image or graphic overlays inserted into the frame. The model decides WHAT to show, WHEN, WHERE, and the intent type. The backend resolver turns intent fields into a concrete local image_url before rendering.",
       "default": [],
       "items": {
         "type": "object",
-        "required": ["start_s", "end_s", "image_query", "position"],
+        "required": ["start_s", "end_s", "position"],
         "additionalProperties": false,
+        "anyOf": [
+          { "required": ["search_query"] },
+          { "required": ["visual_description"] }
+        ],
         "properties": {
           "start_s": {
             "type": "number",
@@ -198,14 +202,31 @@
             "type": "number",
             "description": "When the overlay disappears."
           },
+          "asset_type": {
+            "type": "string",
+            "enum": ["stock_photo", "icon", "generated_illustration", "diagram"],
+            "default": "stock_photo",
+            "description": "Creative intent for resolver strategy. stock_photo tries Pixabay first; generated_illustration/diagram may fall back to image generation."
+          },
+          "visual_description": {
+            "type": "string",
+            "description": "Detailed description of what should appear visually. Used by the generation fallback prompt and as ranking context."
+          },
+          "search_query": {
+            "type": "string",
+            "description": "Primary stock-image query used for Pixabay search."
+          },
           "image_query": {
             "type": "string",
-            "description": "A descriptive search query for the overlay image. The pipeline uses this to fetch a relevant image. e.g., 'python logo', 'confused math meme', 'neural network diagram'. This tests whether the model understands what visual would complement the speech."
+            "description": "Legacy alias for search_query. Kept for backward compatibility and normalized by the backend."
+          },
+          "style": {
+            "type": "string",
+            "description": "Visual style hint (e.g., realistic, minimal flat icon, meme-style, clean diagram)."
           },
           "image_url": {
             "type": "string",
-            "format": "uri",
-            "description": "Direct URL to an image. Used when the image is pre-specified rather than searched. Optional — either image_query or image_url should be provided."
+            "description": "Resolver-owned local public asset path (e.g., overlays/overlay_ab12cd.webp). The VLM should not invent this value."
           },
           "position": {
             "type": "string",

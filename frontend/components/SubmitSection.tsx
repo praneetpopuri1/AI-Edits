@@ -11,20 +11,18 @@ import { useToast } from "@/components/ui/use-toast";
 
 type SubmitSectionProps = {
   videoFile: File | null;
-  imageFiles: File[];
 };
 
 type UploadResponse = {
   jobId: string;
   videoName: string;
-  imageCount: number;
   prompt: string;
   savedAt: string;
 };
 
 const MAX_PROMPT_LEN = 1000;
 
-export function SubmitSection({ videoFile, imageFiles }: SubmitSectionProps) {
+export function SubmitSection({ videoFile }: SubmitSectionProps) {
   const [prompt, setPrompt] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -52,7 +50,6 @@ export function SubmitSection({ videoFile, imageFiles }: SubmitSectionProps) {
 
     const formData = new FormData();
     formData.append("video", videoFile);
-    imageFiles.forEach((file) => formData.append("images", file));
     formData.append("prompt", prompt.trim());
 
     setIsSubmitting(true);
@@ -87,7 +84,7 @@ export function SubmitSection({ videoFile, imageFiles }: SubmitSectionProps) {
       setUploadProgress(100);
       toast({
         title: "Upload complete",
-        description: `Job ${response.jobId} created with ${response.imageCount} image(s).`,
+        description: `Job ${response.jobId} created.`,
       });
     } catch (error) {
       toast({
@@ -136,7 +133,6 @@ export function SubmitSection({ videoFile, imageFiles }: SubmitSectionProps) {
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">Last response</p>
           <p className="mt-2">Job ID: <span className="font-mono">{serverResponse.jobId}</span></p>
           <p>Video: {serverResponse.videoName}</p>
-          <p>Images: {serverResponse.imageCount}</p>
         </div>
       ) : null}
     </div>

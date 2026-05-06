@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Img, interpolate, Sequence, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Img, interpolate, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import type { EditPlan, Overlay } from "../types/editPlan";
 import {
   sourceTimeToOutputSeconds,
@@ -124,7 +124,7 @@ export const OverlaysLayer: React.FC<Props> = ({
                 boxShadow: isFullscreen ? "none" : "0 8px 32px rgba(0,0,0,0.45)",
               }}
             >
-              <Img src={src} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <Img src={staticFile(src)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
           </Sequence>
         );

@@ -67,7 +67,21 @@ python pipeline/render/validate_plan.py edit_plans/my_plan.json
 python pipeline/render/render.py --plan edit_plans/my_plan.json --source-video path/to/video.mp4 --out out/rendered.mp4
 ```
 
-`render.py` validates the plan, copies media into `public/`, and runs `npx remotion render`.
+`render.py` resolves overlay intent into local image assets, validates the plan, copies media into `public/`, and runs `npx remotion render`.
+
+### Overlay resolver env vars
+
+Set these in your shell before running `render.py`:
+
+- `PIXABAY_API_KEY` (recommended) — first-choice stock image search.
+- `OPENAI_API_KEY` (fallback) — generated image when stock search has no usable result.
+
+Behavior:
+
+- Resolver checks each overlay for an existing safe local `image_url` under `public/overlays/`.
+- Otherwise it tries Pixabay using `search_query` / `image_query` / `visual_description`.
+- If stock search fails, it calls OpenAI image generation and saves a local PNG.
+- Unresolved overlays are dropped with a warning so render can continue.
 
 ### Where to put edit plans
 

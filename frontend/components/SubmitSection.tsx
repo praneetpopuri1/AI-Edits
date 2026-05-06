@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, SendHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,8 +16,18 @@ type SubmitSectionProps = {
 type UploadResponse = {
   jobId: string;
   videoName: string;
+  sourceVideoUrl?: string;
+  outputVideoName?: string | null;
+  outputVideoUrl?: string | null;
+  outputUpdatedAt?: string | null;
   prompt: string;
   savedAt: string;
+};
+
+type OutputVideoResponse = {
+  outputVideoName: string;
+  outputVideoUrl: string;
+  updatedAt: string;
 };
 
 const MAX_PROMPT_LEN = 1000;
@@ -28,6 +38,43 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [serverResponse, setServerResponse] = useState<UploadResponse | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const jobId = serverResponse?.jobId;
+    if (!jobId || serverResponse.outputVideoUrl) return;
+
+    let isActive = true;
+
+    const checkForOutputVideo = async () => {
+      try {
+        const response = await fetch(`/api/jobs/${jobId}/output`, { cache: "no-store" });
+        if (!response.ok) return;
+
+        const output = (await response.json()) as OutputVideoResponse;
+        if (!isActive) return;
+
+        setServerResponse((current) => {
+          if (!current || current.jobId !== jobId) return current;
+          return {
+            ...current,
+            outputVideoName: output.outputVideoName,
+            outputVideoUrl: output.outputVideoUrl,
+            outputUpdatedAt: output.updatedAt,
+          };
+        });
+      } catch {
+        // The renderer may still be working; keep polling quietly.
+      }
+    };
+
+    void checkForOutputVideo();
+    const intervalId = window.setInterval(checkForOutputVideo, 3000);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [serverResponse?.jobId, serverResponse?.outputVideoUrl]);
 
   const onSubmit = async () => {
     if (!videoFile) {
@@ -129,10 +176,36 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
       </Button>
 
       {serverResponse ? (
-        <div className="rounded-md border border-zinc-700 bg-black/35 p-3 text-sm text-zinc-200">
+        <div className="space-y-4 rounded-md border border-zinc-700 bg-black/35 p-3 text-sm text-zinc-200">
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">Last response</p>
           <p className="mt-2">Job ID: <span className="font-mono">{serverResponse.jobId}</span></p>
           <p>Video: {serverResponse.videoName}</p>
+
+          {serverResponse.outputVideoUrl ? (
+            <div className="space-y-2">
+              <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">Output video</p>
+              <video
+                controls
+                src={serverResponse.outputVideoUrl}
+                className="aspect-video w-full rounded-lg border border-zinc-700 bg-black"
+              >
+                <track kind="captions" />
+              </video>
+              <a
+                href={serverResponse.outputVideoUrl}
+                download={serverResponse.outputVideoName ?? "output-video.mp4"}
+                className="inline-flex font-mono text-xs text-primary underline-offset-4 hover:underline"
+              >
+                Download output video
+              </a>
+            </div>
+          ) : (
+            <p className="rounded-md border border-zinc-800 bg-zinc-950/60 p-3 text-xs text-zinc-500">
+              Waiting for an output video. The renderer can post it to{" "}
+              <span className="font-mono text-zinc-300">/api/jobs/{serverResponse.jobId}/output</span>,
+              and it will appear here for playback.
+            </p>
+          )}
         </div>
       ) : null}
     </div>

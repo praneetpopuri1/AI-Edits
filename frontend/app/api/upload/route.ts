@@ -20,6 +20,7 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const video = formData.get("video");
+    const outputVideo = formData.get("outputVideo") ?? formData.get("renderedVideo");
     const prompt = formData.get("prompt");
 
     if (!(video instanceof File)) {
@@ -35,6 +36,27 @@ export async function POST(request: Request) {
     const videoName = safeFilename(video.name || "source-video.mp4");
     await saveFile(video, path.join(uploadDir, videoName));
 
+    let outputVideoName: string | null = null;
+    let outputVideoUrl: string | null = null;
+    if (outputVideo instanceof File && outputVideo.size > 0) {
+      outputVideoName = safeFilename(outputVideo.name || "output-video.mp4");
+      await saveFile(outputVideo, path.join(uploadDir, outputVideoName));
+      outputVideoUrl = `/api/video-files/${jobId}/${outputVideoName}`;
+      await writeFile(
+        path.join(uploadDir, "output-video.json"),
+        `${JSON.stringify(
+          {
+            outputVideoName,
+            outputVideoUrl,
+            updatedAt: new Date().toISOString(),
+          },
+          null,
+          2,
+        )}\n`,
+        "utf-8",
+      );
+    }
+
     await writeFile(
       path.join(uploadDir, "prompt.txt"),
       promptText,
@@ -44,6 +66,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       jobId,
       videoName,
+      sourceVideoUrl: `/api/video-files/${jobId}/${videoName}`,
+      outputVideoName,
+      outputVideoUrl,
       prompt: promptText,
       savedAt: uploadDir,
     });

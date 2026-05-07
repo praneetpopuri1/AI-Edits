@@ -35,6 +35,19 @@ export function getUploadDir(jobId: string): string {
   return path.join(getUploadsRoot(), jobId);
 }
 
+export function getOutputVideosRoot(): string {
+  return path.join(getRepoRoot(), "videos", "output_videos");
+}
+
+export function getOutputVideoFilename(jobId: string, rawName: string): string {
+  const safeName = safeFilename(rawName || "output-video.mp4");
+  return `${jobId}_${safeName}`;
+}
+
+export function getOutputVideoUrl(filename: string): string {
+  return `/api/output-videos/${filename}`;
+}
+
 export async function saveBrowserFile(file: File, outputPath: string): Promise<void> {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
@@ -56,9 +69,11 @@ export async function saveUploadJob({
   let outputVideoName: string | null = null;
   let outputVideoUrl: string | null = null;
   if (outputVideo instanceof File && outputVideo.size > 0) {
-    outputVideoName = safeFilename(outputVideo.name || "output-video.mp4");
-    await saveBrowserFile(outputVideo, path.join(uploadDir, outputVideoName));
-    outputVideoUrl = `/api/video-files/${jobId}/${outputVideoName}`;
+    const outputRoot = getOutputVideosRoot();
+    await mkdir(outputRoot, { recursive: true });
+    outputVideoName = getOutputVideoFilename(jobId, outputVideo.name || "output-video.mp4");
+    await saveBrowserFile(outputVideo, path.join(outputRoot, outputVideoName));
+    outputVideoUrl = getOutputVideoUrl(outputVideoName);
     await writeFile(
       path.join(uploadDir, "output-video.json"),
       `${JSON.stringify(

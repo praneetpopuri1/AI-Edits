@@ -15,7 +15,6 @@ from pipeline.planning.local.preprocess import (
 )
 from pipeline.planning.local.run_local_to_colab import build_request_payload
 from pipeline.render.render import render
-from pipeline.render.validate_plan import validate_plan
 
 
 def _ts() -> str:
@@ -25,6 +24,13 @@ def _ts() -> str:
 def _write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"{json.dumps(payload, indent=2)}\n", encoding="utf-8")
+
+
+def _append_log(job_dir: Path, line: str) -> None:
+    log_path = job_dir / "pipeline.log"
+    stamp = _ts()
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(f"[{stamp}] {line}\n")
 
 
 def _set_status(
@@ -47,6 +53,29 @@ def _set_status(
     _write_json(status_path, payload)
 
 
+def _fail_status(
+    job_dir: Path,
+    status_path: Path,
+    *,
+    active_step: str,
+    started_at: str,
+    exc: BaseException,
+) -> None:
+    tb = traceback.format_exc()
+    err_text = f"{type(exc).__name__}: {exc}\n{tb}"
+    _append_log(job_dir, f"FAILED during {active_step}: {type(exc).__name__}: {exc}")
+    short_msg = str(exc).strip() or type(exc).__name__
+    _set_status(
+        status_path,
+        status="failed",
+        step=active_step,
+        message=f"Failed during {active_step}: {short_msg}",
+        error=err_text,
+        started_at=started_at,
+    )
+    _append_log(job_dir, "Full traceback written to status.json (error field) and tail above.")
+
+
 def _load_job(job_dir: Path) -> tuple[str, Path]:
     job_path = job_dir / "job.json"
     if not job_path.exists():
@@ -60,6 +89,16 @@ def _load_job(job_dir: Path) -> tuple[str, Path]:
     if not video_path.exists():
         raise FileNotFoundError(f"Uploaded video is missing at {video_path}")
     return user_prompt, video_path
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _output_videos_dir() -> Path:
+    out = _repo_root() / "videos" / "output_videos"
+    out.mkdir(parents=True, exist_ok=True)
+    return out
 
 
 def parse_args() -> argparse.Namespace:
@@ -88,6 +127,7 @@ def main() -> int:
     job_dir = args.job_dir.resolve()
     status_path = job_dir / "status.json"
     started_at = _ts()
+    (job_dir / "pipeline.log").write_text(f"[{started_at}] Pipeline run started\n", encoding="utf-8")
     _set_status(
         status_path,
         status="running",
@@ -96,6 +136,7 @@ def main() -> int:
         started_at=started_at,
     )
 
+    phase = "preprocessing"
     try:
         user_prompt, video_path = _load_job(job_dir)
 
@@ -104,6 +145,10 @@ def main() -> int:
             run_whisper=args.run_whisper,
             whisper_model=args.whisper_model,
             whisper_language=args.whisper_language,
+        )
+        _append_log(
+            job_dir,
+            f"Preprocess done: duration_s={source_meta.get('duration_s')} words={len(transcript_words)}",
         )
 
         frame_payload: list[dict] | None = None
@@ -119,6 +164,7 @@ def main() -> int:
         elif not args.colab_video_path:
             raise ValueError("colab-video-path is required unless use-frame-array is enabled")
 
+        phase = "planning"
         _set_status(
             status_path,
             status="running",
@@ -126,6 +172,7 @@ def main() -> int:
             message="Submitting job to Colab planner and waiting for response.",
             started_at=started_at,
         )
+        _append_log(job_dir, "Calling Colab /jobs/plan ...")
 
         payload = build_request_payload(
             run_id=uuid4().hex[:10],
@@ -142,12 +189,17 @@ def main() -> int:
         )
         response = request_plan(args.colab_url, payload)
         final_plan = response["final_edit_plan"]
+        _append_log(job_dir, "Colab planner returned final_edit_plan.")
 
         plan_path = job_dir / args.output_plan_name
         _write_json(plan_path, final_plan)
         _write_json(job_dir / "plan_response.json", response)
-        validate_plan(final_plan)
+        _append_log(
+            job_dir,
+            "Saved model plan. Overlay URLs are resolved and validated inside render().",
+        )
 
+        phase = "rendering"
         _set_status(
             status_path,
             status="running",
@@ -155,10 +207,12 @@ def main() -> int:
             message="Rendering final video with Remotion.",
             started_at=started_at,
         )
+        _append_log(job_dir, "Starting Remotion render ...")
 
-        out_path = render(plan_path, video_path, job_dir / args.output_video_name)
+        output_filename = f"{job_dir.name}_{args.output_video_name}"
+        out_path = render(plan_path, video_path, _output_videos_dir() / output_filename)
         output_video_name = out_path.name
-        output_video_url = f"/api/video-files/{job_dir.name}/{output_video_name}"
+        output_video_url = f"/api/output-videos/{output_video_name}"
         _write_json(
             job_dir / "output-video.json",
             {
@@ -167,6 +221,7 @@ def main() -> int:
                 "updatedAt": _ts(),
             },
         )
+        _append_log(job_dir, f"Render complete: {output_video_name}")
 
         _set_status(
             status_path,
@@ -177,14 +232,7 @@ def main() -> int:
         )
         return 0
     except Exception as exc:
-        _set_status(
-            status_path,
-            status="failed",
-            step="failed",
-            message="Pipeline execution failed.",
-            error=f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
-            started_at=started_at,
-        )
+        _fail_status(job_dir, status_path, active_step=phase, started_at=started_at, exc=exc)
         return 1
 
 

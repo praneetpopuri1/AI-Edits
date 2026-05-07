@@ -64,7 +64,9 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
 
   useEffect(() => {
     const jobId = serverResponse?.jobId;
-    if (!jobId || jobStatus?.status === "completed" || jobStatus?.status === "failed") return;
+    if (!jobId) return;
+    if (jobStatus?.status === "failed") return;
+    if (jobStatus?.status === "completed" && serverResponse?.outputVideoUrl) return;
 
     let isActive = true;
 
@@ -90,18 +92,31 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
                 outputVideoUrl: output.outputVideoUrl,
               };
             });
+            if (!serverResponse?.outputVideoUrl) {
+              toast({
+                title: "Pipeline complete",
+                description: `Job ${jobId} finished rendering.`,
+              });
+            }
+          } else {
+            if (!isActive) return;
+            setJobStatus((current) => {
+              if (!current || current.status !== "completed") return current;
+              return {
+                ...current,
+                message: "Render completed. Waiting for output video metadata...",
+              };
+            });
           }
-          toast({
-            title: "Pipeline complete",
-            description: `Job ${jobId} finished rendering.`,
-          });
         }
 
         if (nextStatus.status === "failed") {
+          const firstLine =
+            nextStatus.error?.split("\n").find((l) => l.trim()) ?? nextStatus.message;
           toast({
             variant: "destructive",
             title: "Pipeline failed",
-            description: nextStatus.error ?? "An unknown pipeline error occurred.",
+            description: firstLine.slice(0, 280) + (firstLine.length > 280 ? "…" : ""),
           });
         }
       } catch {
@@ -116,7 +131,7 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
       isActive = false;
       window.clearInterval(intervalId);
     };
-  }, [serverResponse?.jobId, jobStatus?.status, toast]);
+  }, [serverResponse?.jobId, serverResponse?.outputVideoUrl, jobStatus?.status, toast]);
 
   const onSubmit = async () => {
     if (!videoFile) {
@@ -288,23 +303,52 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
       ) : null}
 
       {jobStatus ? (
-        <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-3">
+        <div
+          className={`space-y-2 rounded-md border p-3 ${
+            jobStatus.status === "failed"
+              ? "border-destructive/60 bg-destructive/5"
+              : "border-zinc-800 bg-zinc-950/60"
+          }`}
+        >
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">Pipeline status</p>
           <p className="text-sm text-zinc-200">
             Step: <span className="font-mono">{jobStatus.step}</span>
+            {jobStatus.status === "failed" ? (
+              <span className="ml-2 font-mono text-xs text-destructive">failed</span>
+            ) : null}
           </p>
           <p className="text-xs text-zinc-400">{jobStatus.message}</p>
+          {jobStatus.status === "failed" && jobStatus.error ? (
+            <div className="space-y-2">
+              <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">Details</p>
+              <pre className="max-h-64 overflow-auto rounded border border-zinc-800 bg-black/50 p-2 font-mono text-[0.7rem] leading-snug text-zinc-300">
+                {jobStatus.error}
+              </pre>
+              {serverResponse?.jobId ? (
+                <a
+                  href={`/api/jobs/${serverResponse.jobId}/log`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex font-mono text-xs text-primary underline-offset-4 hover:underline"
+                >
+                  Open pipeline.log (same run, shorter)
+                </a>
+              ) : null}
+            </div>
+          ) : null}
           <Progress
             value={
-              jobStatus.status === "completed"
-                ? 100
-                : jobStatus.step === "rendering"
-                  ? 90
-                  : jobStatus.step === "planning"
-                    ? 60
-                    : jobStatus.step === "preprocessing"
-                      ? 30
-                      : 10
+              jobStatus.status === "failed"
+                ? 0
+                : jobStatus.status === "completed"
+                  ? 100
+                  : jobStatus.step === "rendering"
+                    ? 90
+                    : jobStatus.step === "planning"
+                      ? 60
+                      : jobStatus.step === "preprocessing"
+                        ? 30
+                        : 10
             }
           />
         </div>
@@ -340,8 +384,16 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
               </a>
             </div>
           ) : (
-            <p className="rounded-md border border-zinc-800 bg-zinc-950/60 p-3 text-xs text-zinc-500">
-              Rendering is in progress. The output video will appear automatically when complete.
+            <p
+              className={`rounded-md border p-3 text-xs ${
+                jobStatus?.status === "failed"
+                  ? "border-destructive/40 bg-destructive/5 text-zinc-300"
+                  : "border-zinc-800 bg-zinc-950/60 text-zinc-500"
+              }`}
+            >
+              {jobStatus?.status === "failed"
+                ? "Pipeline failed — see error details above. Fix the issue and submit again."
+                : "Rendering is in progress. The output video will appear automatically when complete."}
             </p>
           )}
         </div>

@@ -2,7 +2,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { NextResponse } from "next/server";
-import { getUploadDir, safeFilename, saveBrowserFile } from "@/lib/saveUpload";
+import {
+  getOutputVideoFilename,
+  getOutputVideoUrl,
+  getOutputVideosRoot,
+  getUploadDir,
+  saveBrowserFile,
+} from "@/lib/saveUpload";
 
 export const runtime = "nodejs";
 
@@ -66,12 +72,15 @@ export async function POST(request: Request, context: RouteContext) {
     const jobDir = getJobDir(jobId);
     await mkdir(jobDir, { recursive: true });
 
-    const outputVideoName = safeFilename(outputVideo.name || "output-video.mp4");
-    await saveBrowserFile(outputVideo, path.join(jobDir, outputVideoName));
+    const outputRoot = getOutputVideosRoot();
+    await mkdir(outputRoot, { recursive: true });
+
+    const outputVideoName = getOutputVideoFilename(jobId, outputVideo.name || "output-video.mp4");
+    await saveBrowserFile(outputVideo, path.join(outputRoot, outputVideoName));
 
     const metadata: OutputVideoMetadata = {
       outputVideoName,
-      outputVideoUrl: `/api/video-files/${jobId}/${outputVideoName}`,
+      outputVideoUrl: getOutputVideoUrl(outputVideoName),
       updatedAt: new Date().toISOString(),
     };
 

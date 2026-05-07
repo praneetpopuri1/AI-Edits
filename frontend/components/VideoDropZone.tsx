@@ -76,14 +76,17 @@ export function VideoDropZone({ videoFile, onVideoChange }: VideoDropZoneProps) 
 
           {previewUrl ? (
             <div className="space-y-3">
-              <video
-                src={previewUrl}
-                controls
-                className="aspect-video w-full rounded-lg border border-zinc-700 bg-black object-cover"
-                onLoadedMetadata={(e) => {
-                  setDuration(e.currentTarget.duration);
-                }}
-              />
+              <div className="flex justify-center rounded-lg border border-zinc-700 bg-black p-2">
+                <video
+                  src={previewUrl}
+                  controls
+                  preload="metadata"
+                  className="max-h-[70vh] w-auto max-w-full rounded-md bg-black"
+                  onLoadedMetadata={(e) => {
+                    setDuration(e.currentTarget.duration);
+                  }}
+                />
+              </div>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary" className="font-mono">
                   <Video className="mr-1 h-3 w-3" />

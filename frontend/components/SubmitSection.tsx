@@ -368,13 +368,16 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
           {serverResponse.outputVideoUrl ? (
             <div className="space-y-2">
               <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">Output video</p>
-              <video
-                controls
-                src={serverResponse.outputVideoUrl}
-                className="aspect-video w-full rounded-lg border border-zinc-700 bg-black"
-              >
-                <track kind="captions" />
-              </video>
+              <div className="flex justify-center rounded-lg border border-zinc-700 bg-black p-2">
+                <video
+                  controls
+                  preload="metadata"
+                  src={serverResponse.outputVideoUrl}
+                  className="max-h-[70vh] w-auto max-w-full rounded-md bg-black"
+                >
+                  <track kind="captions" />
+                </video>
+              </div>
               <a
                 href={serverResponse.outputVideoUrl}
                 download={serverResponse.outputVideoName ?? "output-video.mp4"}

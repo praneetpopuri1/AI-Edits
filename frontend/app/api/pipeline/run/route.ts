@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { closeSync, existsSync, openSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { NextResponse } from "next/server";
@@ -11,6 +12,35 @@ export const runtime = "nodejs";
 function parseBooleanField(value: FormDataEntryValue | null): boolean {
   if (typeof value !== "string") return false;
   return value === "1" || value.toLowerCase() === "true";
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+async function writeWorkerStatus(
+  uploadDir: string,
+  payload: {
+    status: "queued" | "running" | "completed" | "failed";
+    step: string;
+    message: string;
+    error: string | null;
+    startedAt: string | null;
+    updatedAt: string;
+  },
+): Promise<void> {
+  const statusPath = path.join(uploadDir, "status.json");
+  await writeFile(statusPath, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
+}
+
+function resolvePythonCommand(): string {
+  const fromEnv = process.env.AI_EDITS_PYTHON?.trim();
+  if (fromEnv) return fromEnv;
+  const venvPython = path.join(getRepoRoot(), ".venv", "bin", "python");
+  if (existsSync(venvPython)) {
+    return venvPython;
+  }
+  return "python3";
 }
 
 async function loadDotEnvDev(): Promise<Record<string, string>> {
@@ -54,6 +84,15 @@ export async function POST(request: Request) {
       promptText,
       outputVideo: null,
     });
+    const startupAt = nowIso();
+    await writeWorkerStatus(saved.uploadDir, {
+      status: "running",
+      step: "worker_startup",
+      message: "Pipeline worker is starting.",
+      error: null,
+      startedAt: startupAt,
+      updatedAt: startupAt,
+    });
 
     const args = [
       "-m",
@@ -83,12 +122,32 @@ export async function POST(request: Request) {
     }
 
     const dotEnvVars = await loadDotEnvDev();
-    const child = spawn("python3", args, {
+    const stdoutPath = path.join(saved.uploadDir, "worker.stdout.log");
+    const stderrPath = path.join(saved.uploadDir, "worker.stderr.log");
+    const stdoutFd = openSync(stdoutPath, "a");
+    const stderrFd = openSync(stderrPath, "a");
+
+    const child = spawn(resolvePythonCommand(), args, {
       cwd: getRepoRoot(),
       detached: true,
-      env: { ...process.env, ...dotEnvVars },
-      stdio: "ignore",
+      env: { ...process.env, ...dotEnvVars, PYTHONUNBUFFERED: "1" },
+      stdio: ["ignore", stdoutFd, stderrFd],
     });
+    closeSync(stdoutFd);
+    closeSync(stderrFd);
+
+    child.once("error", () => {
+      const failedAt = nowIso();
+      void writeWorkerStatus(saved.uploadDir, {
+        status: "failed",
+        step: "worker_startup",
+        message: "Failed to start pipeline worker process.",
+        error: "Spawn failed. Check worker.stderr.log for details.",
+        startedAt: startupAt,
+        updatedAt: failedAt,
+      });
+    });
+
     child.unref();
 
     return NextResponse.json({

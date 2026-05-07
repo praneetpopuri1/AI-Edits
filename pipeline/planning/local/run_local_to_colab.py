@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -14,6 +15,7 @@ from pipeline.planning.local.frontend_upload import (
 from pipeline.planning.local.preprocess import (
     encode_frames_base64,
     preprocess_video,
+    probe_video_raw,
     sample_frames,
     write_run_artifacts,
 )
@@ -61,6 +63,18 @@ def _print_plan_metrics(
     else:
         print("warnings=[]")
     print("========================\n")
+
+
+def _payload_for_logging(payload: dict[str, Any]) -> dict[str, Any]:
+    cloned = json.loads(json.dumps(payload))
+    vision_input = cloned.get("vision_input")
+    if isinstance(vision_input, dict) and vision_input.get("type") == "frame_array":
+        frames = vision_input.get("frames")
+        if isinstance(frames, list):
+            vision_input["frames_preview"] = frames[:3]
+            vision_input["frame_count"] = len(frames)
+            vision_input["frames"] = ["<omitted_base64_frames>"]
+    return cloned
 
 
 def build_request_payload(
@@ -221,6 +235,11 @@ def main() -> int:
         whisper_model=args.whisper_model,
         whisper_language=args.whisper_language,
     )
+    if transcript_words:
+        preview = " ".join(word.get("word", "") for word in transcript_words[:12]).strip()
+        print(f"[whisper] words={len(transcript_words)} preview=\"{preview}\"")
+    else:
+        print("[whisper] words=0")
 
     frame_payload: list[dict[str, Any]] | None = None
     if args.use_frame_array:
@@ -268,9 +287,10 @@ def main() -> int:
     write_run_artifacts(
         run_dir,
         {
-            "request": payload,
+            "request": _payload_for_logging(payload),
             "response": response,
             "source_meta": source_meta,
+            "source_video_ffprobe": probe_video_raw(video_path),
             "transcript_words": transcript_words,
             "validation": {
                 "valid": validation_error is None,
@@ -284,7 +304,14 @@ def main() -> int:
 
     if args.render_out:
         args.render_out.parent.mkdir(parents=True, exist_ok=True)
-        render(args.output_plan, video_path, args.render_out)
+        _, _overlay_warnings = render(
+            args.output_plan,
+            video_path,
+            args.render_out,
+            debug_dir=run_dir / "render_debug",
+        )
+        for w in _overlay_warnings:
+            print(w, file=sys.stderr)
 
     print(str(args.output_plan))
     return 0

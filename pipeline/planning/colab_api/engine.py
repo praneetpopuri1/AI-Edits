@@ -123,7 +123,7 @@ class QwenPlannerEngine:
         sample_fps: float,
         max_frames: int,
         max_new_tokens: int,
-    ) -> str:
+    ) -> tuple[str, dict[str, Any]]:
         self._ensure_loaded()
         assert self._model is not None
         assert self._processor is not None
@@ -210,15 +210,26 @@ class QwenPlannerEngine:
         m = re.match(r"<think>\n?(.*?)</think>\n*", raw_output, flags=re.DOTALL)
         if m:
             raw_output = raw_output[m.end() :].strip()
-        return raw_output.strip()
+
+        seq_len = int(inputs.input_ids.shape[1])
+        prompt_stats: dict[str, Any] = {
+            "input_ids_sequence_length": seq_len,
+            "chat_template_character_count": len(chat_text),
+            "max_new_tokens_requested": max_new_tokens,
+            "note": (
+                "input_ids_sequence_length is the prompt length in tokens after the processor "
+                "(includes vision/video tokens expanded for Qwen3-VL; compare to model context limit)."
+            ),
+        }
+        return raw_output.strip(), prompt_stats
 
     def generate(
         self,
         request: PlanRequest,
-    ) -> tuple[str, list[dict[str, Any]], str, dict[str, Any], dict[str, Any], list[str]]:
+    ) -> tuple[str, list[dict[str, Any]], str, dict[str, Any], dict[str, Any], list[str], dict[str, Any], dict[str, Any]]:
         warnings: list[str] = []
         timeline_prompt = build_timeline_prompt(request.source_meta)
-        timeline_response = self._run_prompt(
+        timeline_response, pass1_prompt_stats = self._run_prompt(
             text_prompt=timeline_prompt,
             vision_payload=request.vision_input.model_dump(),
             sample_fps=request.generation.sample_fps,
@@ -256,13 +267,17 @@ class QwenPlannerEngine:
             transcript_words=request.transcript_words,
             user_prompt=request.user_prompt,
         )
-        plan_response = self._run_prompt(
+        plan_response, pass2_prompt_stats = self._run_prompt(
             text_prompt=plan_prompt,
             vision_payload=request.vision_input.model_dump(),
             sample_fps=request.generation.sample_fps,
             max_frames=request.generation.max_frames,
             max_new_tokens=request.generation.max_new_tokens_plan,
         )
+        pass2_prompt_stats = {
+            **pass2_prompt_stats,
+            "plan_instruction_plain_text_chars": len(plan_prompt),
+        }
 
         try:
             model_plan_raw = extract_json_object(plan_response)
@@ -279,7 +294,16 @@ class QwenPlannerEngine:
                 caption_words=request.transcript_words,
             )
 
-        return timeline_response, timeline_events, plan_response, model_plan_raw, final_edit_plan, warnings
+        return (
+            timeline_response,
+            timeline_events,
+            plan_response,
+            model_plan_raw,
+            final_edit_plan,
+            warnings,
+            pass1_prompt_stats,
+            pass2_prompt_stats,
+        )
 
 
 def build_engine_from_env() -> QwenPlannerEngine:

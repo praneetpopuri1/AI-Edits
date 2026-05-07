@@ -42,6 +42,8 @@ class PlanResponse(BaseModel):
     model_plan_raw: dict[str, Any]
     final_edit_plan: dict[str, Any]
     warnings: list[str] = Field(default_factory=list)
+    pass1_prompt_stats: dict[str, Any] = Field(default_factory=dict)
+    pass2_prompt_stats: dict[str, Any] = Field(default_factory=dict)
 
 
 JobStatus = Literal["queued", "running", "completed", "failed", "cancelled"]

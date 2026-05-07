@@ -25,11 +25,31 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const jobDir = getUploadDir(jobId);
   const statusPath = path.join(jobDir, "status.json");
+  const workerStderrPath = path.join(jobDir, "worker.stderr.log");
 
   try {
     const payload = JSON.parse(await readFile(statusPath, "utf-8"));
     return NextResponse.json(payload);
   } catch {
+    try {
+      const stderr = (await readFile(workerStderrPath, "utf-8")).trim();
+      if (stderr) {
+        return NextResponse.json(
+          {
+            status: "failed",
+            step: "worker_startup",
+            message: "Pipeline worker crashed during startup.",
+            error: stderr.slice(0, 8000),
+            startedAt: null,
+            updatedAt: new Date().toISOString(),
+          },
+          { status: 200 },
+        );
+      }
+    } catch {
+      // stderr log may not exist yet while worker is still starting.
+    }
+
     return NextResponse.json(
       {
         status: "queued",

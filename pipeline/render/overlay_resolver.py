@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import mimetypes
 import os
 from pathlib import Path
 from typing import Any
@@ -11,7 +10,8 @@ from urllib.parse import urlparse
 
 import requests
 
-PIXABAY_ENDPOINT = "https://pixabay.com/api/"
+# Pixabay stock search disabled for now; all resolved overlays use OpenAI image generation.
+# PIXABAY_ENDPOINT = "https://pixabay.com/api/"
 OPENAI_IMAGE_ENDPOINT = "https://api.openai.com/v1/images/generations"
 OVERLAY_DIR_NAME = "overlays"
 REQUEST_TIMEOUT_S = 25
@@ -80,50 +80,50 @@ def _size_for_overlay(overlay: dict[str, Any]) -> str:
     return POSITION_TO_SIZE.get(position, "1024x1024")
 
 
-def _guess_extension(content_type: str | None, fallback_url: str | None = None) -> str:
-    if content_type:
-        ext = mimetypes.guess_extension(content_type.split(";")[0].strip())
-        if ext:
-            return ".jpg" if ext == ".jpe" else ext
-    if fallback_url:
-        parsed = urlparse(fallback_url)
-        suffix = Path(parsed.path).suffix.lower()
-        if suffix in {".jpg", ".jpeg", ".png", ".webp"}:
-            return suffix
-    return ".jpg"
+# def _guess_extension(content_type: str | None, fallback_url: str | None = None) -> str:
+#     if content_type:
+#         ext = mimetypes.guess_extension(content_type.split(";")[0].strip())
+#         if ext:
+#             return ".jpg" if ext == ".jpe" else ext
+#     if fallback_url:
+#         parsed = urlparse(fallback_url)
+#         suffix = Path(parsed.path).suffix.lower()
+#         if suffix in {".jpg", ".jpeg", ".png", ".webp"}:
+#             return suffix
+#     return ".jpg"
 
 
-def _resolve_from_pixabay(
-    overlay: dict[str, Any],
-    cache_key: str,
-    overlays_dir: Path,
-    pixabay_key: str,
-) -> Path | None:
-    query = _query_for_search(overlay)
-    if not query:
-        return None
-    params = {
-        "key": pixabay_key,
-        "q": query,
-        "image_type": "photo",
-        "safesearch": "true",
-        "per_page": 6,
-    }
-    response = requests.get(PIXABAY_ENDPOINT, params=params, timeout=REQUEST_TIMEOUT_S)
-    response.raise_for_status()
-    hits = response.json().get("hits", [])
-    if not hits:
-        return None
-    candidate = hits[0]
-    source_url = candidate.get("largeImageURL") or candidate.get("webformatURL")
-    if not source_url:
-        return None
-    media = requests.get(source_url, timeout=REQUEST_TIMEOUT_S)
-    media.raise_for_status()
-    ext = _guess_extension(media.headers.get("content-type"), source_url)
-    out_path = overlays_dir / f"overlay_{cache_key}{ext}"
-    out_path.write_bytes(media.content)
-    return out_path
+# def _resolve_from_pixabay(
+#     overlay: dict[str, Any],
+#     cache_key: str,
+#     overlays_dir: Path,
+#     pixabay_key: str,
+# ) -> Path | None:
+#     query = _query_for_search(overlay)
+#     if not query:
+#         return None
+#     params = {
+#         "key": pixabay_key,
+#         "q": query,
+#         "image_type": "photo",
+#         "safesearch": "true",
+#         "per_page": 6,
+#     }
+#     response = requests.get(PIXABAY_ENDPOINT, params=params, timeout=REQUEST_TIMEOUT_S)
+#     response.raise_for_status()
+#     hits = response.json().get("hits", [])
+#     if not hits:
+#         return None
+#     candidate = hits[0]
+#     source_url = candidate.get("largeImageURL") or candidate.get("webformatURL")
+#     if not source_url:
+#         return None
+#     media = requests.get(source_url, timeout=REQUEST_TIMEOUT_S)
+#     media.raise_for_status()
+#     ext = _guess_extension(media.headers.get("content-type"), source_url)
+#     out_path = overlays_dir / f"overlay_{cache_key}{ext}"
+#     out_path.write_bytes(media.content)
+#     return out_path
 
 
 def _resolve_from_openai(
@@ -177,7 +177,7 @@ def resolve_overlay_assets(
 
     overlays_dir = public_dir / OVERLAY_DIR_NAME
     overlays_dir.mkdir(parents=True, exist_ok=True)
-    pixabay_key = os.getenv("PIXABAY_API_KEY", "").strip()
+    # pixabay_key = os.getenv("PIXABAY_API_KEY", "").strip()
     openai_key = os.getenv("OPENAI_API_KEY", "").strip()
 
     warnings: list[str] = []
@@ -203,32 +203,21 @@ def resolve_overlay_assets(
             continue
 
         output_path: Path | None = None
-        query = _query_for_search(overlay)
-        asset_type = str(overlay.get("asset_type", "stock_photo")).strip()
-        # Stock searches should hit Pixabay first; illustration intent should try OpenAI first
-        # when a key is present, then fall back to stock search.
-        prefer_openai_first = asset_type == "generated_illustration" and bool(openai_key)
-
-        if prefer_openai_first:
+        if openai_key:
             try:
                 output_path = _resolve_from_openai(overlay, cache_key, overlays_dir, openai_key)
             except requests.RequestException as exc:
                 warnings.append(f"overlays[{idx}] openai generation failed: {exc}")
 
-        if output_path is None and query and pixabay_key:
-            try:
-                output_path = _resolve_from_pixabay(overlay, cache_key, overlays_dir, pixabay_key)
-            except requests.RequestException as exc:
-                warnings.append(f"overlays[{idx}] pixabay lookup failed: {exc}")
-
-        if output_path is None and openai_key and not prefer_openai_first:
-            try:
-                output_path = _resolve_from_openai(overlay, cache_key, overlays_dir, openai_key)
-            except requests.RequestException as exc:
-                warnings.append(f"overlays[{idx}] openai generation failed: {exc}")
+        # Pixabay path (was: stock_photo tried Pixabay before OpenAI):
+        # if output_path is None and query and pixabay_key:
+        #     try:
+        #         output_path = _resolve_from_pixabay(overlay, cache_key, overlays_dir, pixabay_key)
+        #     except requests.RequestException as exc:
+        #         warnings.append(f"overlays[{idx}] pixabay lookup failed: {exc}")
 
         if output_path is None:
-            warnings.append(f"overlays[{idx}] unresolved and dropped (no usable Pixabay/OpenAI result).")
+            warnings.append(f"overlays[{idx}] unresolved and dropped (no usable OpenAI result).")
             continue
 
         overlay["image_url"] = _public_relative_path(output_path, public_dir)

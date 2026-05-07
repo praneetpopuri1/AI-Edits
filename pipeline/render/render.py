@@ -69,6 +69,13 @@ def _normalized_output_path(out_path: Path) -> Path:
     return out_path
 
 
+def _write_debug_artifact(debug_dir: Path | None, filename: str, payload: str) -> None:
+    if debug_dir is None:
+        return
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    (debug_dir / filename).write_text(payload, encoding="utf-8")
+
+
 def render(
     plan_path: Path,
     source_video: Path,
@@ -77,8 +84,11 @@ def render(
     music_track: Path | None = None,
     source_video_public_name: str | None = None,
     music_public_name: str = "music.mp3",
-) -> Path:
+    debug_dir: Path | None = None,
+) -> tuple[Path, list[str]]:
     out_path = _normalized_output_path(out_path).resolve()
+    source_video = source_video.resolve()
+    plan_path = plan_path.resolve()
 
     with plan_path.open(encoding="utf-8") as f:
         plan = json.load(f)
@@ -87,8 +97,14 @@ def render(
     plan, overlay_warnings = resolve_overlay_assets(plan, public)
     for warning in overlay_warnings:
         print(f"[overlay-resolver] {warning}", file=sys.stderr)
+        print(f"[overlay-resolver] {warning}", flush=True)
 
     validate_plan(plan)
+    _write_debug_artifact(
+        debug_dir,
+        "validated_plan_for_render.json",
+        f"{json.dumps(plan, indent=2)}\n",
+    )
 
     if source_video_public_name is None:
         # Preserve original extension so Remotion gets the right media type
@@ -118,11 +134,36 @@ def render(
 
     try:
         cmd = _remotion_command(props_path, out_path)
+        _write_debug_artifact(
+            debug_dir,
+            "render_inputs.json",
+            (
+                json.dumps(
+                    {
+                        "plan_path": str(plan_path),
+                        "source_video": str(source_video),
+                        "output_path": str(out_path),
+                        "renderer_cwd": str(renderer),
+                        "source_video_public_name": source_video_public_name,
+                        "music_public_name": music_public_name if music_track is not None else None,
+                        "music_track": str(music_track.resolve()) if music_track else None,
+                        "command": cmd,
+                    },
+                    indent=2,
+                )
+                + "\n"
+            ),
+        )
+        _write_debug_artifact(
+            debug_dir,
+            "remotion_props.json",
+            f"{json.dumps(props, indent=2)}\n",
+        )
         subprocess.run(cmd, cwd=renderer, check=True)
     finally:
         props_path.unlink(missing_ok=True)
 
-    return out_path
+    return out_path, overlay_warnings
 
 
 def main() -> int:
@@ -141,7 +182,7 @@ def main() -> int:
     normalized_out = _normalized_output_path(args.out).resolve()
     normalized_out.parent.mkdir(parents=True, exist_ok=True)
     try:
-        out = render(args.plan, args.source_video, normalized_out, music_track=args.music)
+        out, _warnings = render(args.plan, args.source_video, normalized_out, music_track=args.music)
     except (subprocess.CalledProcessError, ValueError, FileNotFoundError) as e:
         print(str(e), file=sys.stderr)
         return 1

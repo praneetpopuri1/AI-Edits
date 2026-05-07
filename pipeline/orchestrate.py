@@ -5,12 +5,14 @@ import json
 import traceback
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from pipeline.planning.local.client import request_plan
 from pipeline.planning.local.preprocess import (
     encode_frames_base64,
     preprocess_video,
+    probe_video_raw,
     sample_frames,
 )
 from pipeline.planning.local.run_local_to_colab import build_request_payload
@@ -21,7 +23,7 @@ def _ts() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _write_json(path: Path, payload: dict) -> None:
+def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"{json.dumps(payload, indent=2)}\n", encoding="utf-8")
 
@@ -31,6 +33,22 @@ def _append_log(job_dir: Path, line: str) -> None:
     stamp = _ts()
     with log_path.open("a", encoding="utf-8") as f:
         f.write(f"[{stamp}] {line}\n")
+
+
+def _dump_artifact(job_dir: Path, filename: str, payload: dict | list) -> None:
+    _write_json(job_dir / filename, payload)
+
+
+def _payload_for_logging(payload: dict) -> dict:
+    cloned = json.loads(json.dumps(payload))
+    vision_input = cloned.get("vision_input")
+    if isinstance(vision_input, dict) and vision_input.get("type") == "frame_array":
+        frames = vision_input.get("frames")
+        if isinstance(frames, list):
+            vision_input["frames_preview"] = frames[:3]
+            vision_input["frame_count"] = len(frames)
+            vision_input["frames"] = ["<omitted_base64_frames>"]
+    return cloned
 
 
 def _set_status(
@@ -101,6 +119,12 @@ def _output_videos_dir() -> Path:
     return out
 
 
+def _edit_plans_dir() -> Path:
+    out = _repo_root() / "edit_plans"
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run full AI-Edits pipeline for one frontend upload job.")
     parser.add_argument("--job-dir", required=True, type=Path, help="Path to frontend/uploads/<jobId> directory.")
@@ -146,10 +170,16 @@ def main() -> int:
             whisper_model=args.whisper_model,
             whisper_language=args.whisper_language,
         )
+        _dump_artifact(job_dir, "source_meta.json", source_meta)
+        _dump_artifact(job_dir, "source_video_ffprobe.json", probe_video_raw(video_path))
+        _dump_artifact(job_dir, "whisper_words.json", transcript_words)
         _append_log(
             job_dir,
             f"Preprocess done: duration_s={source_meta.get('duration_s')} words={len(transcript_words)}",
         )
+        if transcript_words:
+            preview = " ".join(word.get("word", "") for word in transcript_words[:12]).strip()
+            _append_log(job_dir, f"Whisper preview: {preview}")
 
         frame_payload: list[dict] | None = None
         if args.use_frame_array:
@@ -187,6 +217,7 @@ def main() -> int:
             sample_fps=args.sample_fps,
             max_frames=args.max_frames,
         )
+        _dump_artifact(job_dir, "planner_request_payload.json", _payload_for_logging(payload))
         response = request_plan(args.colab_url, payload)
         final_plan = response["final_edit_plan"]
         _append_log(job_dir, "Colab planner returned final_edit_plan.")
@@ -194,9 +225,16 @@ def main() -> int:
         plan_path = job_dir / args.output_plan_name
         _write_json(plan_path, final_plan)
         _write_json(job_dir / "plan_response.json", response)
+        pass1_raw = str(response.get("pass1_raw_response", ""))
+        pass2_raw = str(response.get("pass2_raw_response", ""))
+        (job_dir / "pass1_raw_response.txt").write_text(pass1_raw, encoding="utf-8")
+        (job_dir / "pass2_raw_response.txt").write_text(pass2_raw, encoding="utf-8")
+        edit_plan_path = _edit_plans_dir() / f"{job_dir.name}_{args.output_plan_name}"
+        _write_json(edit_plan_path, final_plan)
         _append_log(
             job_dir,
-            "Saved model plan. Overlay URLs are resolved and validated inside render().",
+            f"Saved model plan to {plan_path} and {edit_plan_path}. "
+            "Overlay URLs are resolved and validated inside render().",
         )
 
         phase = "rendering"
@@ -210,7 +248,15 @@ def main() -> int:
         _append_log(job_dir, "Starting Remotion render ...")
 
         output_filename = f"{job_dir.name}_{args.output_video_name}"
-        out_path = render(plan_path, video_path, _output_videos_dir() / output_filename)
+        render_debug_dir = job_dir / "render_debug"
+        out_path, overlay_warnings = render(
+            plan_path,
+            video_path,
+            _output_videos_dir() / output_filename,
+            debug_dir=render_debug_dir,
+        )
+        for ow in overlay_warnings:
+            _append_log(job_dir, ow)
         output_video_name = out_path.name
         output_video_url = f"/api/output-videos/{output_video_name}"
         _write_json(

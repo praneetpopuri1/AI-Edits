@@ -58,6 +58,8 @@ def _run_plan_job(job_id: str, request: PlanRequest) -> None:
                 model_plan_raw,
                 final_edit_plan,
                 warnings,
+                pass1_prompt_stats,
+                pass2_prompt_stats,
             ) = engine.generate(request)
         result = PlanResponse(
             run_id=request.run_id,
@@ -67,6 +69,8 @@ def _run_plan_job(job_id: str, request: PlanRequest) -> None:
             model_plan_raw=model_plan_raw,
             final_edit_plan=final_edit_plan,
             warnings=warnings,
+            pass1_prompt_stats=pass1_prompt_stats,
+            pass2_prompt_stats=pass2_prompt_stats,
         )
         with jobs_lock:
             current = jobs[job_id]

@@ -128,3 +128,21 @@ def preprocess_video(
         )
     return source_meta, words
 
+
+def probe_video_raw(video_path: Path) -> dict[str, Any]:
+    """
+    Return full ffprobe stream/format data for debugging orientation and centering issues.
+    """
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-print_format",
+        "json",
+        "-show_streams",
+        "-show_format",
+        str(video_path),
+    ]
+    out = subprocess.check_output(cmd).decode("utf-8")
+    return json.loads(out)
+

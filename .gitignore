@@ -15,4 +15,6 @@ edit_plans/
 skills/
 #claude md file
 CLAUDE.md
+# Claude Code worktrees / local metadata
+.claude/
 .env.dev

@@ -33,8 +33,8 @@ class OverlayResolverTests(unittest.TestCase):
             self.assertEqual(warnings, [])
             self.assertEqual(out["overlays"][0]["image_url"], "overlays/existing.png")
 
-    @patch("pipeline.render.overlay_resolver.requests.get")
-    def test_resolves_via_pixabay(self, mock_get: Mock) -> None:
+    @patch("pipeline.render.overlay_resolver.requests.post")
+    def test_resolves_stock_overlay_via_openai(self, mock_post: Mock) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             public_dir = Path(tmp) / "public"
             public_dir.mkdir(parents=True, exist_ok=True)
@@ -49,29 +49,23 @@ class OverlayResolverTests(unittest.TestCase):
                 ]
             }
 
-            pixabay_response = Mock()
-            pixabay_response.json.return_value = {
-                "hits": [{"largeImageURL": "https://example.com/plane.jpg"}]
-            }
-            pixabay_response.raise_for_status.return_value = None
+            payload = base64.b64encode(b"png-bytes").decode("utf-8")
+            openai_response = Mock()
+            openai_response.json.return_value = {"data": [{"b64_json": payload}]}
+            openai_response.raise_for_status.return_value = None
+            mock_post.return_value = openai_response
 
-            image_response = Mock()
-            image_response.content = b"img"
-            image_response.headers = {"content-type": "image/jpeg"}
-            image_response.raise_for_status.return_value = None
-
-            mock_get.side_effect = [pixabay_response, image_response]
-            with patch.dict("os.environ", {"PIXABAY_API_KEY": "pix-key"}, clear=False):
+            with patch.dict("os.environ", {"OPENAI_API_KEY": "openai-key"}, clear=False):
                 out, warnings = resolve_overlay_assets(plan, public_dir)
 
             self.assertEqual(warnings, [])
             self.assertEqual(len(out["overlays"]), 1)
             self.assertTrue(out["overlays"][0]["image_url"].startswith("overlays/overlay_"))
+            self.assertTrue(out["overlays"][0]["image_url"].endswith(".png"))
             self.assertTrue((public_dir / out["overlays"][0]["image_url"]).exists())
 
     @patch("pipeline.render.overlay_resolver.requests.post")
-    @patch("pipeline.render.overlay_resolver.requests.get")
-    def test_falls_back_to_openai(self, mock_get: Mock, mock_post: Mock) -> None:
+    def test_resolves_generated_illustration_via_openai(self, mock_post: Mock) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             public_dir = Path(tmp) / "public"
             public_dir.mkdir(parents=True, exist_ok=True)
@@ -87,22 +81,13 @@ class OverlayResolverTests(unittest.TestCase):
                 ]
             }
 
-            pixabay_empty = Mock()
-            pixabay_empty.json.return_value = {"hits": []}
-            pixabay_empty.raise_for_status.return_value = None
-            mock_get.return_value = pixabay_empty
-
             payload = base64.b64encode(b"png-data").decode("utf-8")
             openai_response = Mock()
             openai_response.json.return_value = {"data": [{"b64_json": payload}]}
             openai_response.raise_for_status.return_value = None
             mock_post.return_value = openai_response
 
-            with patch.dict(
-                "os.environ",
-                {"PIXABAY_API_KEY": "pix-key", "OPENAI_API_KEY": "openai-key"},
-                clear=False,
-            ):
+            with patch.dict("os.environ", {"OPENAI_API_KEY": "openai-key"}, clear=False):
                 out, warnings = resolve_overlay_assets(plan, public_dir)
 
             self.assertEqual(warnings, [])

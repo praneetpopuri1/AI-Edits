@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, SendHorizontal } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Copy, Loader2, SendHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -39,6 +39,23 @@ type JobStatusResponse = {
   updatedAt: string | null;
 };
 
+type JobPlanResponse = {
+  pass1RawResponse: string;
+  pass2RawResponse: string;
+  timelineEvents: unknown[];
+  warnings: unknown[];
+  finalEditPlan: unknown;
+  pass1PromptStats: Record<string, unknown> | null;
+  pass2PromptStats: Record<string, unknown> | null;
+};
+
+type BackendLogsResponse = {
+  pipelineLog: string;
+  workerStderr: string;
+  workerStdout: string;
+  updatedAt: string;
+};
+
 const MAX_PROMPT_LEN = 1000;
 const COLAB_URL_STORAGE_KEY = "ai-edits-colab-url";
 
@@ -54,8 +71,30 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [jobStatus, setJobStatus] = useState<JobStatusResponse | null>(null);
+  const [backendLogs, setBackendLogs] = useState<BackendLogsResponse | null>(null);
   const [serverResponse, setServerResponse] = useState<UploadResponse | null>(null);
+  const [planResponse, setPlanResponse] = useState<JobPlanResponse | null>(null);
   const { toast } = useToast();
+  const completionToastSentRef = useRef(false);
+  const failureToastSentRef = useRef(false);
+
+  useEffect(() => {
+    completionToastSentRef.current = false;
+    failureToastSentRef.current = false;
+  }, [serverResponse?.jobId]);
+
+  const copyLabel = async (label: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Copied", description: label });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Copy failed",
+        description: "Clipboard permission or browser blocked access.",
+      });
+    }
+  };
 
   useEffect(() => {
     if (!colabUrl) return;
@@ -65,41 +104,58 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
   useEffect(() => {
     const jobId = serverResponse?.jobId;
     if (!jobId) return;
-    if (jobStatus?.status === "failed") return;
-    if (jobStatus?.status === "completed" && serverResponse?.outputVideoUrl) return;
 
-    let isActive = true;
+    let cancelled = false;
 
-    const checkStatus = async () => {
+    const tick = async () => {
       try {
-        const response = await fetch(`/api/jobs/${jobId}/status`, { cache: "no-store" });
-        if (!response.ok) return;
+        const [statusResponse, logsResponse] = await Promise.all([
+          fetch(`/api/jobs/${jobId}/status`, { cache: "no-store" }),
+          fetch(`/api/jobs/${jobId}/logs`, { cache: "no-store" }),
+        ]);
 
-        const nextStatus = (await response.json()) as JobStatusResponse;
-        if (!isActive) return;
+        if (cancelled || !statusResponse.ok) return;
+
+        const nextStatus = (await statusResponse.json()) as JobStatusResponse;
+        if (cancelled) return;
         setJobStatus(nextStatus);
+
+        if (logsResponse.ok) {
+          const logs = (await logsResponse.json()) as BackendLogsResponse;
+          if (!cancelled) setBackendLogs(logs);
+        }
 
         if (nextStatus.status === "completed") {
           const outputResponse = await fetch(`/api/jobs/${jobId}/output`, { cache: "no-store" });
+          const planDetailsResponse = await fetch(`/api/jobs/${jobId}/plan`, { cache: "no-store" });
           if (outputResponse.ok) {
             const output = (await outputResponse.json()) as OutputVideoResponse;
-            if (!isActive) return;
+            if (cancelled) return;
+
+            let gainedOutput = false;
             setServerResponse((current) => {
               if (!current || current.jobId !== jobId) return current;
+              if (current.outputVideoUrl) return current;
+              gainedOutput = true;
               return {
                 ...current,
                 outputVideoName: output.outputVideoName,
                 outputVideoUrl: output.outputVideoUrl,
               };
             });
-            if (!serverResponse?.outputVideoUrl) {
+            if (gainedOutput && !completionToastSentRef.current) {
+              completionToastSentRef.current = true;
               toast({
                 title: "Pipeline complete",
                 description: `Job ${jobId} finished rendering.`,
               });
             }
-          } else {
-            if (!isActive) return;
+          }
+
+          if (planDetailsResponse.ok) {
+            const details = (await planDetailsResponse.json()) as JobPlanResponse;
+            if (!cancelled) setPlanResponse(details);
+          } else if (!cancelled) {
             setJobStatus((current) => {
               if (!current || current.status !== "completed") return current;
               return {
@@ -110,7 +166,8 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
           }
         }
 
-        if (nextStatus.status === "failed") {
+        if (nextStatus.status === "failed" && !failureToastSentRef.current) {
+          failureToastSentRef.current = true;
           const firstLine =
             nextStatus.error?.split("\n").find((l) => l.trim()) ?? nextStatus.message;
           toast({
@@ -124,14 +181,14 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
       }
     };
 
-    void checkStatus();
-    const intervalId = window.setInterval(checkStatus, 3000);
+    void tick();
+    const intervalId = window.setInterval(tick, 3000);
 
     return () => {
-      isActive = false;
+      cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [serverResponse?.jobId, serverResponse?.outputVideoUrl, jobStatus?.status, toast]);
+  }, [serverResponse?.jobId, toast]);
 
   const onSubmit = async () => {
     if (!videoFile) {
@@ -183,7 +240,9 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
     setIsSubmitting(true);
     setUploadProgress(0);
     setJobStatus(null);
+    setBackendLogs(null);
     setServerResponse(null);
+    setPlanResponse(null);
 
     try {
       const response = await new Promise<UploadResponse>((resolve, reject) => {
@@ -318,10 +377,12 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
             ) : null}
           </p>
           <p className="text-xs text-zinc-400">{jobStatus.message}</p>
-          {jobStatus.status === "failed" && jobStatus.error ? (
+          {jobStatus.error ? (
             <div className="space-y-2">
-              <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">Details</p>
-              <pre className="max-h-64 overflow-auto rounded border border-zinc-800 bg-black/50 p-2 font-mono text-[0.7rem] leading-snug text-zinc-300">
+              <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                status.json error (python traceback)
+              </p>
+              <pre className="max-h-96 overflow-auto rounded border border-zinc-800 bg-black/50 p-2 font-mono text-[0.7rem] leading-snug text-zinc-300">
                 {jobStatus.error}
               </pre>
               {serverResponse?.jobId ? (
@@ -331,10 +392,47 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
                   rel="noreferrer"
                   className="inline-flex font-mono text-xs text-primary underline-offset-4 hover:underline"
                 >
-                  Open pipeline.log (same run, shorter)
+                  Open raw pipeline.log
                 </a>
               ) : null}
             </div>
+          ) : null}
+          {backendLogs &&
+          (backendLogs.pipelineLog || backendLogs.workerStderr || backendLogs.workerStdout) ? (
+            <details
+              className="rounded border border-zinc-800 bg-black/40"
+              open={jobStatus.status !== "completed"}
+            >
+              <summary className="cursor-pointer p-2 font-mono text-[0.65rem] uppercase tracking-[0.15em] text-zinc-400">
+                Backend logs (pipeline + worker stdout/stderr)
+              </summary>
+              <div className="space-y-3 border-t border-zinc-800 p-2">
+                {backendLogs.pipelineLog ? (
+                  <div className="space-y-1">
+                    <p className="font-mono text-[0.6rem] text-zinc-500">pipeline.log</p>
+                    <pre className="max-h-48 overflow-auto rounded border border-zinc-800/80 bg-black/60 p-2 font-mono text-[0.65rem] text-zinc-300">
+                      {backendLogs.pipelineLog}
+                    </pre>
+                  </div>
+                ) : null}
+                {backendLogs.workerStderr ? (
+                  <div className="space-y-1">
+                    <p className="font-mono text-[0.6rem] text-amber-500/90">worker.stderr.log (Remotion, overlay resolver, etc.)</p>
+                    <pre className="max-h-48 overflow-auto rounded border border-amber-900/40 bg-black/60 p-2 font-mono text-[0.65rem] text-zinc-300">
+                      {backendLogs.workerStderr}
+                    </pre>
+                  </div>
+                ) : null}
+                {backendLogs.workerStdout ? (
+                  <div className="space-y-1">
+                    <p className="font-mono text-[0.6rem] text-zinc-500">worker.stdout.log</p>
+                    <pre className="max-h-36 overflow-auto rounded border border-zinc-800/80 bg-black/60 p-2 font-mono text-[0.65rem] text-zinc-300">
+                      {backendLogs.workerStdout}
+                    </pre>
+                  </div>
+                ) : null}
+              </div>
+            </details>
           ) : null}
           <Progress
             value={
@@ -399,6 +497,134 @@ export function SubmitSection({ videoFile }: SubmitSectionProps) {
                 : "Rendering is in progress. The output video will appear automatically when complete."}
             </p>
           )}
+
+          {planResponse ? (
+            <div className="space-y-3 rounded-md border border-zinc-800 bg-zinc-950/60 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-400">
+                  Plan details (pass 1 / pass 2 / final JSON)
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 font-mono text-xs"
+                  onClick={() =>
+                    void copyLabel(
+                      "Pass 1 + 2 + final JSON",
+                      JSON.stringify(
+                        {
+                          pass1RawResponse: planResponse.pass1RawResponse,
+                          pass2RawResponse: planResponse.pass2RawResponse,
+                          finalEditPlan: planResponse.finalEditPlan,
+                          warnings: planResponse.warnings,
+                          pass1PromptStats: planResponse.pass1PromptStats,
+                          pass2PromptStats: planResponse.pass2PromptStats,
+                        },
+                        null,
+                        2,
+                      ),
+                    )
+                  }
+                >
+                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  Copy all
+                </Button>
+              </div>
+
+              {Array.isArray(planResponse.warnings) && planResponse.warnings.length > 0 ? (
+                <div className="rounded border border-amber-900/50 bg-amber-950/20 p-2">
+                  <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-amber-200/90">
+                    Colab planner warnings
+                  </p>
+                  <ul className="mt-1 list-inside list-disc font-mono text-[0.7rem] text-zinc-300">
+                    {planResponse.warnings.map((w, i) => (
+                      <li key={i}>{String(w)}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {planResponse.pass2PromptStats && Object.keys(planResponse.pass2PromptStats).length > 0 ? (
+                <div className="space-y-1 rounded border border-zinc-800 bg-zinc-900/40 p-2">
+                  <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-zinc-400">
+                    Pass 2 prompt size (from Colab processor)
+                  </p>
+                  <pre className="max-h-40 overflow-auto font-mono text-[0.7rem] leading-snug text-zinc-300">
+                    {JSON.stringify(planResponse.pass2PromptStats, null, 2)}
+                  </pre>
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                    Pass 1 raw response
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 font-mono text-xs text-zinc-400"
+                    onClick={() => void copyLabel("Pass 1 raw response", planResponse.pass1RawResponse || "")}
+                  >
+                    <Copy className="mr-1 h-3 w-3" />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="max-h-56 overflow-auto rounded border border-zinc-800 bg-black/50 p-2 font-mono text-[0.7rem] leading-snug text-zinc-300">
+                  {planResponse.pass1RawResponse || "(empty)"}
+                </pre>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                    Pass 2 raw response
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 font-mono text-xs text-zinc-400"
+                    onClick={() => void copyLabel("Pass 2 raw response", planResponse.pass2RawResponse || "")}
+                  >
+                    <Copy className="mr-1 h-3 w-3" />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="max-h-56 overflow-auto rounded border border-zinc-800 bg-black/50 p-2 font-mono text-[0.7rem] leading-snug text-zinc-300">
+                  {planResponse.pass2RawResponse || "(empty)"}
+                </pre>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                    Final edit plan JSON (saved in edit_plans/)
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 font-mono text-xs text-zinc-400"
+                    onClick={() =>
+                      void copyLabel(
+                        "Final edit plan JSON",
+                        JSON.stringify(planResponse.finalEditPlan, null, 2),
+                      )
+                    }
+                  >
+                    <Copy className="mr-1 h-3 w-3" />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="max-h-72 overflow-auto rounded border border-zinc-800 bg-black/50 p-2 font-mono text-[0.7rem] leading-snug text-zinc-300">
+                  {JSON.stringify(planResponse.finalEditPlan, null, 2)}
+                </pre>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

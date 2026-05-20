@@ -1,12 +1,24 @@
-import torch
-from transformers import AutoProcessor, AutoModelForImageTextToText
-from qwen_vl_utils import process_vision_info
 import os
+
+os.environ["FORCE_QWENVL_VIDEO_READER"] = "decord"
+
+import torch
+from transformers import AutoProcessor, AutoModelForImageTextToText, BitsAndBytesConfig
+from qwen_vl_utils import process_vision_info
 import time
+from whisper_and_wave import diarized_audio, wave_form_text, get_video_metadata
+import json
 
 t0 = time.time()
-hf_token = os.environ.get("HF_TOKEN")
+hf_token = "some_token"
 model_id = "Qwen/Qwen3-VL-8B-Thinking"
+
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_use_double_quant=True,
+)
 
 
 processor = AutoProcessor.from_pretrained(model_id, token=hf_token)
@@ -14,12 +26,14 @@ processor = AutoProcessor.from_pretrained(model_id, token=hf_token)
 model = AutoModelForImageTextToText.from_pretrained(
     model_id,
     device_map="auto",
+    quantization_config=bnb_config,
+
     torch_dtype=torch.float16,
     token=hf_token
 )
 
 
-def inference(video, prompt, max_new_tokens=2048, total_pixels=20480 * 32 * 32, min_pixels=64 * 32 * 32, max_frames= 2048, sample_fps = 5):
+def inference(video, prompt, max_new_tokens=2048*4, total_pixels=20480 * 32 * 32, min_pixels=64 * 32 * 32, max_frames= 2048, sample_fps = 1):
     """
     Perform multimodal inference on input video and text prompt to generate model response.
 
@@ -43,7 +57,27 @@ def inference(video, prompt, max_new_tokens=2048, total_pixels=20480 * 32 * 32, 
         - When `video` is a string (path/URL), `sample_fps` is ignored and will be overridden by the video reader backend.
         - When `video` is a frame list, `sample_fps` informs the model of the original sampling rate to help understand temporal density.
     """
+    source_meta = get_video_metadata(video)
+    diarized_text = diarized_audio("/workspace/videos/youtube_downloads/first_half_lud.opus", hf_token)
+    wave_form = wave_form_text("/workspace/videos/youtube_downloads/first_half_lud.opus")
+    PROMPT_TIMELINE = f"""
+        You are analyzing a video for an editing pipeline.
 
+        Source metadata:
+        {json.dumps(source_meta, indent=2)}
+        speaker text:
+        {diarized_text}
+
+        # wave form outputs:
+        {wave_form}
+
+        You are making a rough cut, determining which segements of the video to discard,
+          priotize parts where the main speaker is talking and where the video is engaging, just discard boring parts of the video espcially when no one is talking do lots of discards do not be shy, 
+          just go with your gut feeling.
+          format:[discard, timpstamp: 04-06]
+                        """.strip()
+    
+        
     messages = [
         {"role": "user", "content": [
                 {"video": video,
@@ -51,7 +85,7 @@ def inference(video, prompt, max_new_tokens=2048, total_pixels=20480 * 32 * 32, 
                 "min_pixels": min_pixels, 
                 "max_frames": max_frames,
                 'sample_fps':sample_fps},
-                {"type": "text", "text": prompt},
+                {"type": "text", "text": PROMPT_TIMELINE},
             ]
         },
     ]
@@ -87,9 +121,11 @@ def inference(video, prompt, max_new_tokens=2048, total_pixels=20480 * 32 * 32, 
     return output_text[0]
 
 
-answer = inference("../../../short_clips/pranav_monkey_fixed.mp4", "Understand the video and answer these three questions: 1) What action does the person do at the beginning of the video? 2) what items does the person in the video hold up, in order? 3) what is the title of the book the person held up?")
+answer = inference("/workspace/videos/youtube_downloads/ludwig_fixed_first.mp4", " ")
 print(answer)
 
+# rand prompt 
+# first analyze this video, find what the purpose and reason of the video is. Next you are an expert video editor and your job is turn this video
 
 #EXAMPLE OUTPUT:
 # Got it, let's break down the video step by step. 

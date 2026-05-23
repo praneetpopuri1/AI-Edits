@@ -1,0 +1,50 @@
+{
+  "detailed_video_explanation": "A structured video edit plan analyzing a news commentary segment covering Trump's high-stakes trip to China. The video includes news footage, social media interaction, document analysis, historical context, live event coverage, and host commentary. Segments are organized chronologically to highlight thematic shifts, ensuring smooth transitions between news coverage, audience engagement, and expert analysis.",
+  "segments": [
+    {
+      "label": "Intro: Host Introduces Trump-China Meeting Context",
+      "start_sec": 0.0,
+      "end_sec": 240.0
+    },
+    {
+      "label": "News Coverage: NYC Man on Camera Footage",
+      "start_sec": 240.0,
+      "end_sec": 480.0
+    },
+    {
+      "label": "Social Media Interaction: Live Chat Analysis",
+      "start_sec": 480.0,
+      "end_sec": 720.0
+    },
+    {
+      "label": "Document Review: Meeting Agenda Analysis",
+      "start_sec": 720.0,
+      "end_sec": 960.0
+    },
+    {
+      "label": "Historical Context: Past Diplomatic Meetings",
+      "start_sec": 960.0,
+      "end_sec": 1200.0
+    },
+    {
+      "label": "Current Event Footage: Trump's Arrival in China",
+      "start_sec": 1200.0,
+      "end_sec": 1440.0
+    },
+    {
+      "label": "Live Analysis: Ongoing Meeting Discussion",
+      "start_sec": 1440.0,
+      "end_sec": 1680.0
+    },
+    {
+      "label": "News Reporting: White House Statements",
+      "start_sec": 1680.0,
+      "end_sec": 1920.0
+    },
+    {
+      "label": "Conclusion: Wrap-up and Key Takeaways",
+      "start_sec": 1920.0,
+      "end_sec": 2106.0
+    }
+  ]
+}

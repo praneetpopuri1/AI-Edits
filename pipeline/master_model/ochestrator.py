@@ -1,39 +1,24 @@
 import os
 
-os.environ["FORCE_QWENVL_VIDEO_READER"] = "decord"
 
 import torch
 from transformers import AutoProcessor, AutoModelForImageTextToText, BitsAndBytesConfig
 from qwen_vl_utils import process_vision_info
 import time
-from whisper_and_wave import diarized_audio, wave_form_text, get_video_metadata
+from whisper_and_wave import diarized_audio, wave_form_text, get_video_duration
 import json
-
-t0 = time.time()
-hf_token = "some_token"
-model_id = "Qwen/Qwen3-VL-8B-Thinking"
-
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16,
-    bnb_4bit_use_double_quant=True,
-)
+from json_helpers import validate_video_json, extract_video_json, extract_thinking_trace
 
 
-processor = AutoProcessor.from_pretrained(model_id, token=hf_token)
-
-model = AutoModelForImageTextToText.from_pretrained(
-    model_id,
-    device_map="auto",
-    quantization_config=bnb_config,
-
-    torch_dtype=torch.float16,
-    token=hf_token
-)
+videos = ["/workspace/videos/youtube_downloads/hasan_china_trump_raw.webm","/workspace/videos/youtube_downloads/smallant_minecraft_raw.webm", "/workspace/videos/youtube_downloads/squeex_bad_steam_games_raw.webm"]
+durations = [get_video_duration(videos[0]),get_video_duration(videos[1]),get_video_duration(videos[2])]
+names = ["hasan_segments", "smallant_segments","squeex_segments"]
+# video = "/workspace/videos/youtube_downloads/ludwig_mrbeast_raw.webm"
+# duration = get_video_duration(video)
+# name = "lud_full_segments"
 
 
-def inference(video, prompt, max_new_tokens=2048*4, total_pixels=20480 * 32 * 32, min_pixels=64 * 32 * 32, max_frames= 2048, sample_fps = 1):
+def inference(video, duration, prompt, max_new_tokens=2048*2, total_pixels=20480 * 32 * 32, min_pixels=64 * 32 * 32, max_frames= 2048, sample_fps = 2):
     """
     Perform multimodal inference on input video and text prompt to generate model response.
 
@@ -57,24 +42,69 @@ def inference(video, prompt, max_new_tokens=2048*4, total_pixels=20480 * 32 * 32
         - When `video` is a string (path/URL), `sample_fps` is ignored and will be overridden by the video reader backend.
         - When `video` is a frame list, `sample_fps` informs the model of the original sampling rate to help understand temporal density.
     """
-    source_meta = get_video_metadata(video)
-    diarized_text = diarized_audio("/workspace/videos/youtube_downloads/first_half_lud.opus", hf_token)
-    wave_form = wave_form_text("/workspace/videos/youtube_downloads/first_half_lud.opus")
+    t0 = time.time()
+    hf_token = "some_token"
+    model_id = "Qwen/Qwen3-VL-8B-Thinking"
+
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_use_double_quant=True,
+    )
+
+
+    processor = AutoProcessor.from_pretrained(model_id, token=hf_token)
+
+    model = AutoModelForImageTextToText.from_pretrained(
+        model_id,
+        device_map="auto",
+        quantization_config=bnb_config,
+
+        torch_dtype=torch.float16,
+        token=hf_token
+    )
+    #diarized_text = diarized_audio("/workspace/videos/youtube_downloads/first_half_lud.opus", hf_token)
+    #wave_form = wave_form_text("/workspace/videos/youtube_downloads/first_half_lud.opus")
+
+
+    schema = """{
+  "detailed_video_explanation": "string",
+  "segments": [
+    {
+      "label": "intro",
+      "start_sec": 0.0,
+      "end_sec": 135.0
+    }
+  ]
+}"""
+
+
     PROMPT_TIMELINE = f"""
-        You are analyzing a video for an editing pipeline.
+        You are a video-editing planner.
 
-        Source metadata:
-        {json.dumps(source_meta, indent=2)}
-        speaker text:
-        {diarized_text}
+Task:
+Analyze the video and return a structured edit plan.
 
-        # wave form outputs:
-        {wave_form}
+Rules:
+- Return only valid JSON.
+- Do not include markdown.
+- Use seconds as numbers, not timestamp strings.
+- Each segment must satisfy: start_sec < end_sec.
+- Segments must be sorted by start_sec.
+- Every second of the video must be in a segment
+- Do not invent timestamps.
+- Labels should describe the theme and content of each segment.
+- Each segment should be between 0 seconds to 240 seconds
+- The video duration is {duration} seconds.
+- All timestamps must be between 0 and {duration}.
+- Do not output overlapping segments 
 
-        You are making a rough cut, determining which segements of the video to discard,
-          priotize parts where the main speaker is talking and where the video is engaging, just discard boring parts of the video espcially when no one is talking do lots of discards do not be shy, 
-          just go with your gut feeling.
-          format:[discard, timpstamp: 04-06]
+Output schema:
+{schema}
+
+Editing intent:
+You are an orchestrator, where you are sending video segments into another VLM to cut or keep parts of the segments. So break the video into thematic segments. 
                         """.strip()
     
         
@@ -121,22 +151,24 @@ def inference(video, prompt, max_new_tokens=2048*4, total_pixels=20480 * 32 * 32
     return output_text[0]
 
 
-answer = inference("/workspace/videos/youtube_downloads/ludwig_fixed_first.mp4", " ")
-print(answer)
+for i in range(len(videos)):
+    answer = inference(videos[i],durations[i], " ")
+    name = names[i]
+    print(answer)
+    json_answer = extract_video_json(answer)
+    thinking_answer = extract_thinking_trace(answer)
+    errors = validate_video_json(json_answer)
 
-# rand prompt 
-# first analyze this video, find what the purpose and reason of the video is. Next you are an expert video editor and your job is turn this video
+    if errors:
+        print("Invalid JSON output:")
+        for err in errors:
+            print("-", err)
+            print(json.dump(json_answer, indent=2))
+    else:
+        with open(name + '.json', "w", encoding="utf-8") as f:
+            json.dump(json_answer, f, indent=2)
 
-#EXAMPLE OUTPUT:
-# Got it, let's break down the video step by step. 
+        with open(name + 'thinking.txt', "w", encoding="utf-8") as f:
+            json.dump(thinking_answer, f, indent=2)
 
-# First, the beginning of the video. The first frame shows the person, and then in the next frames, they wave. So the action at the beginning is waving. Let me check: the second frame (0.2s to 1.2s) shows the person raising their hand to wave. Yep, that's the first action.
-
-# Second, the items held up in order. Let's list the sequence. First, after waving, they hold up a book. Then, after the book, they hold up a box (the blue one for slide bags). Then, they hold up a container with a ball (the black one). So the order is book, blue box, container. Let's confirm: frame 4-9 is book, then frame 17-22 is blue box, then 23-36 is the container. Correct.
-
-# Third, the book's title. The book is shown in frames 4-9, and the cover has "Patterns for Building AI Agents". Let's check the text: in frame 5-8, the book cover says "Patterns for Building AI Agents". So that's the title.
-# </think>
-
-# 1) At the beginning of the video, the person waves their hand.  
-# 2) The items the person holds up, in order, are: a book, a blue box labeled "Slide Bags," and a cylindrical container with a spherical top.  
-# 3) The title of the book is "Patterns for Building AI Agents."
+        print("sucessfully ouputed json at " + name + '.json')

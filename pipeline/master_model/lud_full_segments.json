@@ -1,0 +1,60 @@
+{
+  "detailed_video_explanation": "The video features a streamer interacting with a large group of streamers in purple uniforms, participating in a series of elimination games. It includes segments showcasing the group's introduction, gameplay explanations, shooting challenges, a Lamborghini challenge, soccer-based eliminations, and final wrap-up moments. The streamer hosts the event, guiding participants through various challenges while managing eliminations based on viewer votes and game mechanics.",
+  "segments": [
+    {
+      "label": "Intro: Streamer's YouTube Page",
+      "start_sec": 0.0,
+      "end_sec": 59.0
+    },
+    {
+      "label": "Speed Group Introduction",
+      "start_sec": 59.0,
+      "end_sec": 120.0
+    },
+    {
+      "label": "Streamers Interacting and Dancing",
+      "start_sec": 120.0,
+      "end_sec": 220.0
+    },
+    {
+      "label": "Group Posing and Reactions",
+      "start_sec": 220.0,
+      "end_sec": 310.0
+    },
+    {
+      "label": "Game Rules Explanation",
+      "start_sec": 310.0,
+      "end_sec": 385.0
+    },
+    {
+      "label": "Voting Process for Eliminations",
+      "start_sec": 385.0,
+      "end_sec": 520.0
+    },
+    {
+      "label": "Shooting Game Gameplay",
+      "start_sec": 520.0,
+      "end_sec": 850.0
+    },
+    {
+      "label": "Lamborghini Challenge",
+      "start_sec": 850.0,
+      "end_sec": 1160.0
+    },
+    {
+      "label": "Soccer Challenge: Crossing Challenge",
+      "start_sec": 1160.0,
+      "end_sec": 1420.0
+    },
+    {
+      "label": "Continued Soccer Game and Eliminations",
+      "start_sec": 1420.0,
+      "end_sec": 1650.0
+    },
+    {
+      "label": "Final Challenges and Wrap-up",
+      "start_sec": 1650.0,
+      "end_sec": 1926.0
+    }
+  ]
+}

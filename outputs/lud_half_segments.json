@@ -1,0 +1,35 @@
+{
+  "detailed_video_explanation": "A competitive challenge show where a group of streamers in purple uniforms compete to 'shoot' targets representing other streamers. The video begins with an introduction showing the host's Twitch channel, transitions to the main challenge stage where rules are explained, features group interactions and reactions during the challenge, and concludes with the results of the shooting competition.",
+  "segments": [
+    {
+      "label": "intro",
+      "start_sec": 0.0,
+      "end_sec": 25.0
+    },
+    {
+      "label": "challenge_intro",
+      "start_sec": 25.0,
+      "end_sec": 85.0
+    },
+    {
+      "label": "group_reaction",
+      "start_sec": 85.0,
+      "end_sec": 150.0
+    },
+    {
+      "label": "target_explanation",
+      "start_sec": 150.0,
+      "end_sec": 220.0
+    },
+    {
+      "label": "shooting_phase",
+      "start_sec": 220.0,
+      "end_sec": 780.0
+    },
+    {
+      "label": "results",
+      "start_sec": 780.0,
+      "end_sec": 962.0
+    }
+  ]
+}

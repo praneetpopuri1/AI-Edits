@@ -1,0 +1,52 @@
+{
+  "parts": [
+    {
+      "decision": "keep",
+      "reasoning": "Keep because the intro is useful and sets context for what Pokemon team the creator is bringing",
+      "start_sec": 3.5,
+      "end_sec": 4.38
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because although this helps explain the situation, it feels like filler and does not move the battle forward.",
+      "start_sec": 4.38,
+      "end_sec": 5.13
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because it shows what moves the creator chose for the first turn of the battle and explains his thought process.",
+      "start_sec": 5.13,
+      "end_sec": 5.54
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because it shows what the first turn of the battle resulted in.",
+      "start_sec": 5.54,
+      "end_sec": 6.16
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because it hows what moves the creator chose for the second turn of the battle and explains his thought process.",
+      "start_sec": 6.16,
+      "end_sec": 6.44
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because it hows what the second turn of the battle resulted in before the waiting screen begins.",
+      "start_sec": 6.44,
+      "end_sec": 7.29
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because it is a waiting screen where the creator does not add any new commentary, decision-making, or useful visual information.",
+      "start_sec": 7.29,
+      "end_sec": 7.45
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because it shows what the third turn of the battle is and explains his thought process.",
+      "start_sec": 7.45,
+      "end_sec": 8.0
+    }
+  ]
+}

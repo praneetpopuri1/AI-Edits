@@ -4,3 +4,6 @@ __pycache__/
 *.pyc
 *.mp4
 *.webm
+thought.txt
+short_clips/
+temp_video_files/

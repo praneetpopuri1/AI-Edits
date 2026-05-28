@@ -1,13 +1,13 @@
 #reformating timestamps to be consistent with model prompts and directions
 import json
 
-name = "clash"
+name = "Valkyrae"
 def get_seconds(x):
     minutes = int(x)
     seconds = round((x - minutes) * 100)
-    return minutes * 60 + seconds
+    return float(minutes * 60 + seconds)
 
-json_file = "blah"
+json_file = name +".json"
 with open(json_file) as f:
     data = json.load(f)
 
@@ -21,7 +21,7 @@ for part in data["parts"]:
     part["end_sec"] = end
 
 with open(name + '_fixed.json', 'w') as f:
-    json.dump(data,f)
+    json.dump(data,f, indent=2)
 
 
 

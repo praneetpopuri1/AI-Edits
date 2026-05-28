@@ -1,0 +1,40 @@
+{
+  "parts": [
+    {
+      "decision": "cut",
+      "reasoning": "Cut because the creator is setting up the video so it shows on her stream and has not started reacting yet.",
+      "start_sec": 0.0,
+      "end_sec": 24.0
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because although the creator has pulled up the video, she has not talked about it or pressed play yet.",
+      "start_sec": 24.0,
+      "end_sec": 63.0
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because the creator starts playing the video she is reacting to, which begins the actual reaction segment.",
+      "start_sec": 63.0,
+      "end_sec": 100.0
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because the creator pauses and gives context about her knowledge of the video creator, adding useful commentary.",
+      "start_sec": 100.0,
+      "end_sec": 130.0
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because the creator resumes the video but does not add a meaningful reaction or commentary.",
+      "start_sec": 130.0,
+      "end_sec": 138.0
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because the creator pauses and reads a funny comment, adding entertainment value and reaction commentary.",
+      "start_sec": 138.0,
+      "end_sec": 153.0
+    }
+  ]
+}

@@ -12,11 +12,11 @@ from whisper_and_wave import diarized_audio, wave_form_text, get_video_duration
 import pickle
 
 hf_token = ""
-
-
+with open("../inputs/in_context_jsons/Valkyrae_fixed.json", 'r', encoding="utf-8") as f:
+    in_context_json = json.load(f)
 #"G:\youtube_downloads\hasan_china_trump_raw.webm"
 def get_segments(json_file, video_path):
-    with open(json_file) as f:
+    with open(json_file, 'r', encoding="utf-8") as f:
         segments = json.load(f)
 
     num_seg = len(segments["segments"])
@@ -70,6 +70,7 @@ def get_segments(json_file, video_path):
         prompt = f"""You are a video-editing planner.
 
 Task:
+
 Analyze the video and determine which parts of the video to keep or cut.
 
 Rules:
@@ -87,6 +88,11 @@ Rules:
 
 Output schema:
 {schema}
+
+the first video you are given is an example of the type cuts you should make
+here is the output for that video example:
+{in_context_json}
+
 speaker text:
         {diarized_text}
 
@@ -96,7 +102,11 @@ Editing intent:
 You are looking at a segment of a larger video and your job is to determine whether to keep ."""
         message = [
             {"role": "user", "content": [
-                    {"video": video_seg,
+                    {"video": context_video,
+                    "total_pixels": total_pixels, 
+                    "min_pixels": min_pixels, 
+                    "max_frames": max_frames,
+                    'sample_fps':sample_fps},{"video": video_seg,
                     "total_pixels": total_pixels, 
                     "min_pixels": min_pixels, 
                     "max_frames": max_frames,
@@ -185,18 +195,18 @@ def batch_inference(name,batches):
             print(answer)
             json_answer = extract_video_json(answer)
             thinking_answer = extract_thinking_trace(answer)
-            errors = validate_video_json(json_answer)
+            #errors = validate_video_json(json_answer)
             
-            if errors:
-                print("Invalid JSON output:")
-                for err in errors:
-                    print("-", err)
-                    print(json.dump(json_answer, indent=2))
-            else:
-                output_json += json_answer["parts"]
+            # if errors:
+            #     print("Invalid JSON output:")
+            #     for err in errors:
+            #         print("-", err)
+            #         print(json.dump(json_answer, indent=2))
+            # else:
+            output_json += json_answer["parts"]
 
-                with open('../outputs/segment' +str(i) + 'thinking.txt', "w", encoding="utf-8") as f:
-                    json.dump(thinking_answer, f, indent=2)
+            with open('../outputs/segment' +str(i) + 'thinking.txt', "w", encoding="utf-8") as f:
+                json.dump(thinking_answer, f, indent=2)
 
             print("sucessfully compiled segment_" + str(i)+ " json")
     with open('../outputs/' + name + '_edl.json', "w", encoding="utf-8") as f:

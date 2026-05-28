@@ -8,9 +8,21 @@ import torch
 from transformers import AutoProcessor, AutoModelForImageTextToText, BitsAndBytesConfig
 from qwen_vl_utils import process_vision_info
 from json_helpers import validate_video_json, extract_video_json, extract_thinking_trace
+from whisper_and_wave import diarized_audio, wave_form_text, get_video_duration
 
+#"G:\youtube_downloads\hasan_china_trump_raw.webm"
+hf_token = "some token"
+schema = """{
+    "parts": [
+        {
+        "decision": "keep | cut",
+        "reasoning": "the main speaker is not saying much and is not engaging to the viewer",
+        "start_sec": 0.0,
+        "end_sec": 28.5
+        }
+    ]
+    }"""
 
-"G:\youtube_downloads\hasan_china_trump_raw.webm"
 def get_segments(json_file, video_path, prompt):
     with open(json_file) as f:
         segments = json.load(f)
@@ -30,8 +42,36 @@ def get_segments(json_file, video_path, prompt):
     print(f"num_batches {num_batches}, batch_size {batch_size}, num_segs {num_seg}")
 
     batches = []
+    duration = get_video_duration(video)
+    diarized_text = diarized_audio("/workspace/videos/youtube_downloads/first_half_lud.opus", hf_token)
+    wave_form = wave_form_text("/workspace/videos/youtube_downloads/first_half_lud.opus")
+    prompt = f"""You are a video-editing planner.
 
-    prompt = "blah blah"
+Task:
+Analyze the video and determine which parts of the video to keep or cut.
+
+Rules:
+- Return only valid JSON.
+- Do not include markdown.
+- Use seconds as numbers, not timestamp strings.
+- Each part must satisfy: start_sec < end_sec.
+- part must be sorted by start_sec.
+- Every second of the video must be in a segment
+- Do not invent timestamps.
+- Labels should describe the theme and content of each segment.
+- The video duration is {duration} seconds.
+- All timestamps must be between 0 and {duration}.
+- Do not output overlapping segments 
+
+Output schema:
+{schema}
+speaker text:
+        {diarized_text}
+
+wave form outputs:
+        {wave_form}
+Editing intent:
+You are looking at a segment of a larger video and your job is to determine whether to keep ."""
     video = video_path 
     path = Path("temp_video_files")
     path.mkdir(parents=True, exist_ok=True)
@@ -77,16 +117,6 @@ def get_segments(json_file, video_path, prompt):
     return batches
     
 
-schema = """{
-    "parts": [
-        {
-        "decision": "keep | cut",
-        "reasoning": "the main speaker is not saying much and is not engaging to the viewer",
-        "start_sec": 0.0,
-        "end_sec": 28.5
-        }
-    ]
-    }"""
 
 def batch_inference(batches):
     output_json = []
@@ -169,3 +199,6 @@ def batch_inference(batches):
     return output_json
 
 
+# some ideas, cut high level parts or chunks that irrelvant to the editors intent, then make meduim level edits,
+# like getting meduim sized chunks the editor does care about, then make granular edits, like these seconds are bad
+# so first part removes 10's of minutes, second pass removes minutes at a time, and last edit removes seconds at a time

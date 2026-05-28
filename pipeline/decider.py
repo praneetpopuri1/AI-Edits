@@ -26,7 +26,6 @@ def get_segments(json_file, video_path):
     total_pixels=20480 * 32 * 32
     min_pixels=64 * 32 * 32
     max_frames= 2048
-    sample_fps = 4
     video = video_path 
     batch_size = int(vram_for_data/vram_per_seg)
 

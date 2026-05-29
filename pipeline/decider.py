@@ -12,6 +12,9 @@ from whisper_and_wave import diarized_audio, wave_form_text, get_video_duration
 import pickle
 
 hf_token = ""
+context_video = "/workspace/AI-Edits/inputs/videos/valkyrae.mp4"
+
+
 with open("../inputs/in_context_jsons/Valkyrae_fixed.json", 'r', encoding="utf-8") as f:
     in_context_json = json.load(f)
 #"G:\youtube_downloads\hasan_china_trump_raw.webm"
@@ -26,6 +29,7 @@ def get_segments(json_file, video_path):
     total_pixels=20480 * 32 * 32
     min_pixels=64 * 32 * 32
     max_frames= 2048
+    sample_fps = 5
     video = video_path 
     batch_size = int(vram_for_data/vram_per_seg)
 
@@ -66,54 +70,105 @@ def get_segments(json_file, video_path):
         duration = get_video_duration(video_seg)
         diarized_text = diarized_audio(video_seg, hf_token)
         wave_form = wave_form_text(video_seg)
-        prompt = f"""You are a video-editing planner.
 
-Task:
 
-Analyze the video and determine which parts of the video to keep or cut.
+        example_prompt = f"""
+            You are a video-editing planner.
 
-Rules:
-- Return only valid JSON.
-- Do not include markdown.
-- Use seconds as numbers, not timestamp strings.
-- Each part must satisfy: start_sec < end_sec.
-- part must be sorted by start_sec.
-- Every second of the video must be in a segment
-- Do not invent timestamps.
-- Labels should describe the theme and content of each segment.
-- The video duration is {duration} seconds.
-- All timestamps must be between 0 and {duration}.
-- Do not output overlapping segments 
+            Analyze this example video and produce keep/cut JSON.
 
-Output schema:
-{schema}
+            Rules:
+            - Return only valid JSON.
+            - Do not include markdown.
+            - Use seconds as numbers.
+            - Each part must satisfy start_sec < end_sec.
+            - Parts must be sorted by start_sec.
+            - Every second of the video must be covered.
+            - Do not output overlapping segments.
 
-the first video you are given is an example of the type cuts you should make
-here is the output for that video example:
-{in_context_json}
+            Return exactly this shape:
 
-speaker text:
-        {diarized_text}
+            Output schema:
+            {schema}
+            Do not return a bare array. The top-level JSON value must be an object with
 
-wave form outputs:
-        {wave_form}
-Editing intent:
-You are looking at a segment of a larger video and your job is to determine whether to keep ."""
+            duration:
+            {context_duration}
+            speaker text:
+            {context_diarized_text}
+
+            wave form outputs:
+            {context_wave_form}
+            Editing intent:
+            Determine which parts should be kept or cut. Be agreesive when cutting, do not just cut silences, 
+            but also parts where the main speaker goes off subject or sections which are not important to the overall theme of the video 
+            """
+
+        target_prompt = f"""
+            Now analyze this new video segment and produce the same kind of keep/cut JSON.
+
+            Rules:
+            - Return only valid JSON.
+            - Do not include markdown.
+            - Use seconds as numbers.
+            - Each part must satisfy start_sec < end_sec.
+            - Parts must be sorted by start_sec.
+            - Every second of the video must be covered.
+            - Do not invent timestamps.
+            - The video duration is {duration} seconds.
+            - All timestamps must be between 0 and {duration}.
+            - Do not output overlapping segments.
+            
+            Return exactly this shape:
+            Output schema:
+            {schema}
+            Do not return a bare array. The top-level JSON value must be an object with
+
+            speaker text:
+            {diarized_text}
+
+            wave form outputs:
+            {wave_form}
+
+            Editing intent:
+            Determine which parts should be kept or cut. Be agreesive when cutting, do not just cut silences, 
+            but also parts where the main speaker goes off subject or sections which are not important to the overall theme of the video 
+            """
+
         message = [
-            {"role": "user", "content": [
-                    {"video": context_video,
-                    "total_pixels": total_pixels, 
-                    "min_pixels": min_pixels, 
-                    "max_frames": max_frames,
-                    'sample_fps':sample_fps},{"video": video_seg,
-                    "total_pixels": total_pixels, 
-                    "min_pixels": min_pixels, 
-                    "max_frames": max_frames,
-                    'sample_fps':sample_fps},
-                    {"type": "text", "text": prompt},
-                ]
+    {
+        "role": "user",
+        "content": [
+            {
+                "video": context_video,
+                "total_pixels": total_pixels,
+                "min_pixels": min_pixels,
+                "max_frames": max_frames,
+                "sample_fps": sample_fps,
             },
-        ]
+            {"type": "text", "text": example_prompt},
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {"type": "text", "text": in_context_json}
+        ],
+    },
+    {
+        "role": "user",
+        "content": [
+            {
+                "video": video_seg,
+                "total_pixels": total_pixels,
+                "min_pixels": min_pixels,
+                "max_frames": max_frames,
+                "sample_fps": sample_fps,
+            },
+            {"type": "text", "text": target_prompt},
+        ],
+    },
+]
         batches[int(i/batch_size)].append(message)
     return batches
     
@@ -155,7 +210,7 @@ def batch_inference(name,batches):
         token=hf_token
     )
     for batch in batches:
-        max_new_tokens=2048*2
+        max_new_tokens=2048*6
 
         
         
@@ -216,7 +271,7 @@ def batch_inference(name,batches):
 # some ideas, cut high level parts or chunks that irrelvant to the editors intent, then make meduim level edits,
 # like getting meduim sized chunks the editor does care about, then make granular edits, like these seconds are bad
 # so first part removes 10's of minutes, second pass removes minutes at a time, and last edit removes seconds at a time
-json_file = "/workspace/AI-Edits/outputs/hasan_segments.json"
+json_file = "/workspace/AI-Edits/outputs/hasan_edits_partial.json"
 video_path = "/workspace/AI-Edits/inputs/videos/hasan_china_trump_raw.webm"
 CACHE_PATH = Path("../outputs/hasan_batches.pkl")
 if CACHE_PATH.exists():
@@ -225,6 +280,9 @@ if CACHE_PATH.exists():
         batches = pickle.load(f)
 else:
     print("Generating batches...")
+    context_duration = get_video_duration(context_video)
+    context_diarized_text = diarized_audio(context_video, hf_token)
+    context_wave_form = wave_form_text(context_video)
     batches = get_segments(json_file, video_path)
 
     with open(CACHE_PATH, "wb") as f:

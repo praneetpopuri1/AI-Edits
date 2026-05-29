@@ -1,0 +1,128 @@
+[
+  {
+    "decision": "cut",
+    "reasoning": "Off-topic commentary about Stephen Chung not relevant to the news footage of Trump's China trip.",
+    "start_sec": 0.0,
+    "end_sec": 56.0
+  },
+  {
+    "decision": "cut",
+    "reasoning": "Off-topic discussion about Bolsonaro unrelated to Trump-China news.",
+    "start_sec": 138.0,
+    "end_sec": 148.0
+  },
+  {
+    "decision": "keep",
+    "reasoning": "News footage providing context for the Trump-China meeting",
+    "start_sec": 0.0,
+    "end_sec": 50.0
+  },
+  {
+    "decision": "keep",
+    "reasoning": "Key quote from Xi about collaboration",
+    "start_sec": 22.0,
+    "end_sec": 30.0
+  },
+  {
+    "decision": "keep",
+    "reasoning": "Trump's tight-lipped response to the meeting",
+    "start_sec": 50.0,
+    "end_sec": 51.0
+  },
+  {
+    "decision": "keep",
+    "reasoning": "Main commentary on Trump's behavior in the meeting",
+    "start_sec": 51.0,
+    "end_sec": 240.0
+  },
+  {
+    "decision": "keep",
+    "reasoning": "This segment is the streamer's main commentary on the event, discussing cultural context of children in international relations.",
+    "start_sec": 0.0,
+    "end_sec": 233.9
+  },
+  {
+    "decision": "cut",
+    "reasoning": "This segment is an off-topic, vague political statement that does not directly relate to the video's focus on the event and cultural analysis.",
+    "start_sec": 233.9,
+    "end_sec": 239.9
+  },
+  {
+    "decision": "keep",
+    "reasoning": "This is the final segment of the streamer's commentary, wrapping up the discussion on the event and cultural aspects.",
+    "start_sec": 239.9,
+    "end_sec": 240.0
+  },
+  {
+    "decision": "keep",
+    "reasoning": "Stream is focused on discussing the US-China summit, which is the main theme.",
+    "start_sec": 0.0,
+    "end_sec": 129.964
+  },
+  {
+    "decision": "cut",
+    "reasoning": "The streamer mentions an irrelevant tangent about Epstein, which distracts from the main geopolitical discussion.",
+    "start_sec": 129.964,
+    "end_sec": 142.112
+  },
+  {
+    "decision": "keep",
+    "reasoning": "Stream resumes discussing relevant summit topics.",
+    "start_sec": 142.112,
+    "end_sec": 146.0
+  },
+  {
+    "decision": "cut",
+    "reasoning": "Silence segment where the streamer is not providing commentary, removing non-essential filler.",
+    "start_sec": 146.0,
+    "end_sec": 148.0
+  },
+  {
+    "decision": "keep",
+    "reasoning": "Stream continues with relevant analysis of the summit and geopolitical implications.",
+    "start_sec": 148.0,
+    "end_sec": 240.0
+  },
+  {
+    "decision": "cut",
+    "reasoning": "Silence segment which doesn't contribute to the content",
+    "start_sec": 54.0,
+    "end_sec": 60.0
+  },
+  {
+    "decision": "cut",
+    "reasoning": "Lengthy historical commentary that is off-topic from the main news segment",
+    "start_sec": 55.0,
+    "end_sec": 80.0
+  },
+  {
+    "decision": "cut",
+    "reasoning": "Filler segment with irrelevant statement about bread lines and comedy country",
+    "start_sec": 99.0,
+    "end_sec": 103.0
+  },
+  {
+    "decision": "cut",
+    "reasoning": "Filler transition phrase 'In any case, let's continue.'",
+    "start_sec": 144.0,
+    "end_sec": 145.0
+  },
+  {
+    "decision": "keep",
+    "reasoning": "The streamer provides engaging commentary at the beginning",
+    "start_sec": 0.0,
+    "end_sec": 5.0
+  },
+  {
+    "decision": "cut",
+    "reasoning": "The streamer is silent and not engaging during the middle section",
+    "start_sec": 5.0,
+    "end_sec": 150.0
+  },
+  {
+    "decision": "keep",
+    "reasoning": "The streamer provides engaging commentary at the end",
+    "start_sec": 150.0,
+    "end_sec": 186.0
+  }
+]

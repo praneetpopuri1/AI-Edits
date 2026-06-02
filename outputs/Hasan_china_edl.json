@@ -45,12 +45,6 @@
     "decision": "cut",
     "reasoning": "This segment is an off-topic, vague political statement that does not directly relate to the video's focus on the event and cultural analysis.",
     "start_sec": 233.9,
-    "end_sec": 239.9
-  },
-  {
-    "decision": "keep",
-    "reasoning": "This is the final segment of the streamer's commentary, wrapping up the discussion on the event and cultural aspects.",
-    "start_sec": 239.9,
     "end_sec": 240.0
   },
   {

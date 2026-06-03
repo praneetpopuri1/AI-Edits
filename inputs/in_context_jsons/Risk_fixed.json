@@ -1,0 +1,58 @@
+{
+  "parts": [
+    {
+      "decision": "cut",
+      "reasoning": "Cut because this is the title screen and nothing important is happening yet.",
+      "start_sec": 0.0,
+      "end_sec": 4.0
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because the creator introduces what he is doing with his friends, which gives the audience context.",
+      "start_sec": 4.0,
+      "end_sec": 10.0
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because this is banter from the cocreators that does not add new commentary, gameplay input, or necessary context.",
+      "start_sec": 10.0,
+      "end_sec": 23.0
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because the creator introduces who he is collaborating with, which helps set up the video.",
+      "start_sec": 23.0,
+      "end_sec": 46.0
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because the cocreator makes a joke that does not add new commentary, gameplay input, or useful setup.",
+      "start_sec": 46.0,
+      "end_sec": 93.0
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because the creator introduces what he and the other cocreators are playing.",
+      "start_sec": 93.0,
+      "end_sec": 95.0
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because the cocreators continue joking without adding new commentary, gameplay input, or necessary context.",
+      "start_sec": 95.0,
+      "end_sec": 119.0
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because the creator switches cameras and shows the audience the board they are using, which can work as b-roll to introduce the game setup.",
+      "start_sec": 119.0,
+      "end_sec": 130.0
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because the cocreators are making jokes that do not add new commentary, gameplay input, or necessary context.",
+      "start_sec": 130.0,
+      "end_sec": 160.0
+    }
+  ]
+}

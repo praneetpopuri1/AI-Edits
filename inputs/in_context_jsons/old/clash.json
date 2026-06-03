@@ -1,0 +1,94 @@
+{
+  "parts": [
+    {
+      "decision": "keep",
+      "reasoning": "Keep because this brief intro sets up the point of the clip before the tower-damage comparison begins.",
+      "start_sec": 8.11,
+      "end_sec": 8.17
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut the gameplay buildup because this rough cut only needs the tower-health result, not the full sequence of how the damage happened.",
+      "start_sec": 8.17,
+      "end_sec": 9.08
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because this shows the opponent's right-side tower health, which is not the relevant tower for the point of this video.",
+      "start_sec": 9.08,
+      "end_sec": 9.10
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut continued gameplay buildup because the important information is the tower-health result, not the process leading to it.",
+      "start_sec": 9.10,
+      "end_sec": 9.22
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because this zoom clearly shows the creator's left-side tower health, which is relevant to the main point of the clip.",
+      "start_sec": 9.22,
+      "end_sec": 9.24
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut gameplay between key tower-health moments because it does not add new information to the rough cut.",
+      "start_sec": 9.24,
+      "end_sec": 10.05
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because this zoom shows the opponent's right-side tower health, which is not relevant to the main tower-health comparison.",
+      "start_sec": 10.05,
+      "end_sec": 10.07
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut continued gameplay buildup because the clip should jump to the next meaningful tower-health result.",
+      "start_sec": 10.07,
+      "end_sec": 10.49
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because this zoom clearly shows the creator's left-side tower health after more damage, making it a relevant result shot.",
+      "start_sec": 10.49,
+      "end_sec": 10.52
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut gameplay buildup because the important part is the updated tower-health result, not the full path to that result.",
+      "start_sec": 10.52,
+      "end_sec": 11.16
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because the opponent's left-side tower damage is too minor here to matter for the story of the clip.",
+      "start_sec": 11.16,
+      "end_sec": 11.18
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut continued gameplay because it does not add enough new information before the next relevant tower-health and counter-push moment.",
+      "start_sec": 11.18,
+      "end_sec": 11.48
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because this shows the opponent's left-side tower health while the creator talks about the counter push, which supports the comeback story.",
+      "start_sec": 11.48,
+      "end_sec": 11.53
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut the remaining buildup because the clip should move quickly to the decisive win moment.",
+      "start_sec": 11.53,
+      "end_sec": 12.05
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because this is the payoff: the creator locks in and wins from a difficult position, which completes the comeback story.",
+      "start_sec": 12.05,
+      "end_sec": 13.16
+    }
+  ]
+}

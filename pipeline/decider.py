@@ -8,31 +8,36 @@ import torch
 from transformers import AutoProcessor, AutoModelForImageTextToText, BitsAndBytesConfig
 from qwen_vl_utils import process_vision_info
 from json_helpers import validate_video_json, extract_video_json, extract_thinking_trace
+from whisper_and_wave import diarized_audio, wave_form_text, get_video_duration
+import pickle
+
+hf_token = ""
+context_video = "/workspace/AI-Edits/inputs/videos/valkyrae.mp4"
 
 
-"G:\youtube_downloads\hasan_china_trump_raw.webm"
-def get_segments(json_file, video_path, prompt):
-    with open(json_file) as f:
+with open("../inputs/in_context_jsons/Valkyrae_fixed.json", 'r', encoding="utf-8") as f:
+    in_context_json = json.load(f)
+#"G:\youtube_downloads\hasan_china_trump_raw.webm"
+def get_segments(json_file, video_path):
+    with open(json_file, 'r', encoding="utf-8") as f:
         segments = json.load(f)
 
     num_seg = len(segments["segments"])
     #defaults 
     vram_for_data = 32
-    vram_per_seg = 8
-    total_pixels=20480 * 32 * 32,
-    min_pixels=64 * 32 * 32,
-    max_frames= 2048, 
-    sample_fps = 4
-
+    vram_per_seg = 32
+    total_pixels=20480 * 32 * 32
+    min_pixels=64 * 32 * 32
+    max_frames= 2048
+    sample_fps = 5
+    video = video_path 
     batch_size = int(vram_for_data/vram_per_seg)
 
     num_batches = math.ceil(num_seg/batch_size)
     print(f"num_batches {num_batches}, batch_size {batch_size}, num_segs {num_seg}")
 
     batches = []
-
-    prompt = "blah blah"
-    video = video_path 
+    
     path = Path("temp_video_files")
     path.mkdir(parents=True, exist_ok=True)
 
@@ -62,17 +67,108 @@ def get_segments(json_file, video_path, prompt):
             video_seg
         ]
         subprocess.call(cmd)
+        duration = get_video_duration(video_seg)
+        diarized_text = diarized_audio(video_seg, hf_token)
+        wave_form = wave_form_text(video_seg)
+
+
+        example_prompt = f"""
+            You are a video-editing planner.
+
+            Analyze this example video and produce keep/cut JSON.
+
+            Rules:
+            - Return only valid JSON.
+            - Do not include markdown.
+            - Use seconds as numbers.
+            - Each part must satisfy start_sec < end_sec.
+            - Parts must be sorted by start_sec.
+            - Every second of the video must be covered.
+            - Do not output overlapping segments.
+
+            Return exactly this shape:
+
+            Output schema:
+            {schema}
+            Do not return a bare array. The top-level JSON value must be an object with
+
+            duration:
+            {context_duration}
+            speaker text:
+            {context_diarized_text}
+
+            wave form outputs:
+            {context_wave_form}
+            Editing intent:
+            Determine which parts should be kept or cut. Be agreesive when cutting, do not just cut silences, 
+            but also parts where the main speaker goes off subject or sections which are not important to the overall theme of the video 
+            """
+
+        target_prompt = f"""
+            Now analyze this new video segment and produce the same kind of keep/cut JSON.
+
+            Rules:
+            - Return only valid JSON.
+            - Do not include markdown.
+            - Use seconds as numbers.
+            - Each part must satisfy start_sec < end_sec.
+            - Parts must be sorted by start_sec.
+            - Every second of the video must be covered.
+            - Do not invent timestamps.
+            - The video duration is {duration} seconds.
+            - All timestamps must be between 0 and {duration}.
+            - Do not output overlapping segments.
+            
+            Return exactly this shape:
+            Output schema:
+            {schema}
+            Do not return a bare array. The top-level JSON value must be an object with
+
+            speaker text:
+            {diarized_text}
+
+            wave form outputs:
+            {wave_form}
+
+            Editing intent:
+            Determine which parts should be kept or cut. Be agreesive when cutting, do not just cut silences, 
+            but also parts where the main speaker goes off subject or sections which are not important to the overall theme of the video 
+            """
+
         message = [
-            {"role": "user", "content": [
-                    {"video": video_seg,
-                    "total_pixels": total_pixels, 
-                    "min_pixels": min_pixels, 
-                    "max_frames": max_frames,
-                    'sample_fps':sample_fps},
-                    {"type": "text", "text": prompt},
-                ]
+    {
+        "role": "user",
+        "content": [
+            {
+                "video": context_video,
+                "total_pixels": total_pixels,
+                "min_pixels": min_pixels,
+                "max_frames": max_frames,
+                "sample_fps": sample_fps,
             },
-        ]
+            {"type": "text", "text": example_prompt},
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {"type": "text", "text": in_context_json}
+        ],
+    },
+    {
+        "role": "user",
+        "content": [
+            {
+                "video": video_seg,
+                "total_pixels": total_pixels,
+                "min_pixels": min_pixels,
+                "max_frames": max_frames,
+                "sample_fps": sample_fps,
+            },
+            {"type": "text", "text": target_prompt},
+        ],
+    },
+]
         batches[int(i/batch_size)].append(message)
     return batches
     
@@ -88,39 +184,40 @@ schema = """{
     ]
     }"""
 
-def batch_inference(batches):
+def batch_inference(name,batches):
+    t0 = time.time()
     output_json = []
+    hf_token = "some_token"
+    #change to omni
+    model_id = "Qwen/Qwen3-VL-8B-Thinking"
 
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_use_double_quant=True,
+    )
+
+
+    processor = AutoProcessor.from_pretrained(model_id, token=hf_token)
+
+    model = AutoModelForImageTextToText.from_pretrained(
+        model_id,
+        device_map="auto",
+        #quantization_config=bnb_config,
+
+        torch_dtype=torch.float16,
+        token=hf_token
+    )
     for batch in batches:
-        max_new_tokens=2048*2
+        max_new_tokens=2048*6
 
-        t0 = time.time()
-        hf_token = "some_token"
-        #change to omni
-        model_id = "Qwen/Qwen3-VL-8B-Thinking"
-
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=True,
-        )
-
-
-        processor = AutoProcessor.from_pretrained(model_id, token=hf_token)
-
-        model = AutoModelForImageTextToText.from_pretrained(
-            model_id,
-            device_map="auto",
-            quantization_config=bnb_config,
-
-            torch_dtype=torch.float16,
-            token=hf_token
-        )
+        
+        
         text = processor.apply_chat_template(batch, tokenize=False, add_generation_prompt=True)
         print("chat template:", time.time() - t0)
         t1 = time.time()
-        image_inputs, video_inputs, video_kwargs = process_vision_info([batch], return_video_kwargs=True, 
+        image_inputs, video_inputs, video_kwargs = process_vision_info(batch, return_video_kwargs=True, 
                                                                     image_patch_size= 16,
                                                                     return_video_metadata=True)
         print("process_vision_info:", time.time() - t1)
@@ -132,7 +229,7 @@ def batch_inference(batches):
         else:
             video_metadatas = None
         t3 = time.time()
-        inputs = processor(text=[text], images=image_inputs, videos=video_inputs, video_metadata=video_metadatas, **video_kwargs, do_resize=False, return_tensors="pt")
+        inputs = processor(text=text, images=image_inputs, videos=video_inputs, video_metadata=video_metadatas, **video_kwargs, do_resize=False, return_tensors="pt")
         print("processor:", time.time() - t3)
         t4 = time.time()
         inputs = inputs.to('cuda')
@@ -152,20 +249,43 @@ def batch_inference(batches):
             print(answer)
             json_answer = extract_video_json(answer)
             thinking_answer = extract_thinking_trace(answer)
-            errors = validate_video_json(json_answer)
+            #errors = validate_video_json(json_answer)
             
-            if errors:
-                print("Invalid JSON output:")
-                for err in errors:
-                    print("-", err)
-                    print(json.dump(json_answer, indent=2))
-            else:
-                output_json += json_answer["parts"]
+            # if errors:
+            #     print("Invalid JSON output:")
+            #     for err in errors:
+            #         print("-", err)
+            #         print(json.dump(json_answer, indent=2))
+            # else:
+            output_json += json_answer["parts"]
 
-                with open('segment' +str(i) + 'thinking.txt', "w", encoding="utf-8") as f:
-                    json.dump(thinking_answer, f, indent=2)
+            with open('../outputs/segment' +str(i) + 'thinking.txt', "w", encoding="utf-8") as f:
+                json.dump(thinking_answer, f, indent=2)
 
             print("sucessfully compiled segment_" + str(i)+ " json")
+    with open('../outputs/' + name + '_edl.json', "w", encoding="utf-8") as f:
+        json.dump(output_json, f, indent=2)
     return output_json
 
 
+# some ideas, cut high level parts or chunks that irrelvant to the editors intent, then make meduim level edits,
+# like getting meduim sized chunks the editor does care about, then make granular edits, like these seconds are bad
+# so first part removes 10's of minutes, second pass removes minutes at a time, and last edit removes seconds at a time
+json_file = "/workspace/AI-Edits/outputs/hasan_edits_partial.json"
+video_path = "/workspace/AI-Edits/inputs/videos/hasan_china_trump_raw.webm"
+CACHE_PATH = Path("../outputs/hasan_batches.pkl")
+if CACHE_PATH.exists():
+    print("Loading batches from cache...")
+    with open(CACHE_PATH, "rb") as f:
+        batches = pickle.load(f)
+else:
+    print("Generating batches...")
+    context_duration = get_video_duration(context_video)
+    context_diarized_text = diarized_audio(context_video, hf_token)
+    context_wave_form = wave_form_text(context_video)
+    batches = get_segments(json_file, video_path)
+
+    with open(CACHE_PATH, "wb") as f:
+        pickle.dump(batches, f)
+
+result = batch_inference("Hasan_china",batches)

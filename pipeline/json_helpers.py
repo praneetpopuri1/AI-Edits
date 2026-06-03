@@ -3,10 +3,6 @@ from typing import Any
 
 
 def extract_video_json(raw_output: str) -> dict[str, Any]:
-    """
-    Extracts the first valid JSON object that matches the expected VLM output shape.
-    It ignores text before/after the JSON, including <think>...</think>.
-    """
     decoder = json.JSONDecoder()
 
     for i, ch in enumerate(raw_output):
@@ -20,12 +16,12 @@ def extract_video_json(raw_output: str) -> dict[str, Any]:
 
         if (
             isinstance(obj, dict)
-            and "detailed_video_explanation" in obj
-            and "segments" in obj
+            and "parts" in obj
+            and isinstance(obj["parts"], list)
         ):
             return obj
 
-    raise ValueError("No valid video-explanation JSON object found in output.")
+    raise ValueError("No valid keep/cut JSON object found in output.")
 
 
 def validate_video_json(

@@ -1,0 +1,64 @@
+{
+  "parts": [
+    {
+      "decision": "cut",
+      "reasoning": "Cut because the creator reads an irrelevant and creepy comment that detracts from the reaction.",
+      "start_sec": 92.50,
+      "end_sec": 93.19
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because this is the main clip being reacted to.",
+      "start_sec": 93.19,
+      "end_sec": 93.45
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because the creator reacts to the clip, adding useful reaction content.",
+      "start_sec": 93.45,
+      "end_sec": 93.52
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because the clip becomes confusing and the creator only looks confused without adding meaningful commentary.",
+      "start_sec": 93.52,
+      "end_sec": 94.38
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because even though the creator reacts, the clip itself is weak and does not add enough value to the final edit.",
+      "start_sec": 94.38,
+      "end_sec": 94.58
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because this ends the clip, but the focus is not on the creator's face or reaction.",
+      "start_sec": 94.58,
+      "end_sec": 95.10
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because the screen changes and clearly shows the creator's face cam, making the reaction easier to see.",
+      "start_sec": 95.10,
+      "end_sec": 95.37
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because the creator talks about an irrelevant clip she did not watch, which does not support the reaction segment.",
+      "start_sec": 95.37,
+      "end_sec": 95.49
+    },
+    {
+      "decision": "keep",
+      "reasoning": "Keep because the creator explains why she is ending the video, giving useful closure to the segment.",
+      "start_sec": 95.49,
+      "end_sec": 96.07
+    },
+    {
+      "decision": "cut",
+      "reasoning": "Cut because the creator talks about raiding someone and future plans, which is not needed for this rough cut.",
+      "start_sec": 96.07,
+      "end_sec": 96.50
+    }
+  ]
+}
